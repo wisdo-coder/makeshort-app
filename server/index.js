@@ -94,46 +94,51 @@ const axios = require('axios');
 
 const ytdl = require('@distube/ytdl-core');
 
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+puppeteer.use(StealthPlugin());
+
 app.post('/api/generate', async (req, res) => {
     const { videoUrl } = req.body;
+    const videoIdMatch = videoUrl.match(/(?:https?:\/\/)?(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w-]{11})/);
+    const ytId = videoIdMatch ? videoIdMatch[1] : null;
+
     const videoId = Date.now();
     const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
-    const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Starting Stealth Download for: ${videoUrl}`);
-        io.emit('status-update', { message: '🚀 Engaging Stealth Bypass...' });
+        console.log(`[1/4] Using Invidious Shield for ID: ${ytId}`);
+        io.emit('status-update', { message: '🛡️ Routing through encrypted shield...' });
 
-        // Create a custom agent to mimic a mobile phone browser
-        const agent = ytdl.createAgent([
-            { name: "User-Agent", value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1" }
-        ]);
+        // We fetch the stream from a public Invidious instance (they rotate IPs)
+        const instance = "https://invidious.projectsegfau.lt"; 
+        const streamUrl = `${instance}/latest_version?id=${ytId}&itag=22`; // itag 22 is 720p MP4
 
-        const downloadStream = ytdl(videoUrl, {
-            agent,
-            quality: 'highestvideo',
-            filter: format => format.container === 'mp4' && format.hasAudio && format.hasVideo
+        console.log("Streaming from shield server...");
+        const response = await axios({
+            method: 'get',
+            url: streamUrl,
+            responseType: 'stream',
+            maxRedirects: 5,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            }
         });
 
         const writer = fs.createWriteStream(inputPath);
-        downloadStream.pipe(writer);
+        response.data.pipe(writer);
 
         await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
-            downloadStream.on('error', reject);
             writer.on('error', reject);
         });
 
-        console.log(`[2/4] Download Complete. Extracting audio...`);
-        // ... (FFMPEG, Whisper, Gemini code remains same)
-
-        res.json({ success: true, message: "Processing successful!" });
+        console.log(`[2/4] Shield Download Success!`);
+        // ... (Rest of FFMPEG / Gemini code)
 
     } catch (error) {
-        console.error("Stealth Error:", error.message);
-        res.status(500).json({ 
-            error: "YouTube is blocking the data center. Please try a different video URL (not a Short) or wait 5 minutes." 
-        });
+        console.error("Shield Error:", error.message);
+        res.status(500).json({ error: "YouTube has blocked this data center globally. We need a private proxy." });
     }
 });
 
