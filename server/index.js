@@ -99,20 +99,21 @@ app.post('/api/generate', async (req, res) => {
     const videoId = Date.now();
     const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
 
     try {
-        console.log(`[1/4] Fetching video using internal yt-dlp engine for ID: ${ytId}`);
+       console.log(`[1/4] Fetching video using internal yt-dlp engine for ID: ${ytId}`);
         io.emit('status-update', { message: '🚀 Deploying internal extraction engine...' });
 
-        // yt-dlp handles the IP bypass, certificates, and formatting natively!
+        // The Bulletproof Config
         await youtubedl(`https://www.youtube.com/watch?v=${ytId}`, {
             output: inputPath,
-            format: 'best[height<=720]', // Keeps file size low for faster AI processing
+            format: 'best[height<=720]', 
             noWarnings: true,
-            noCallHome: true,
             noCheckCertificates: true,
             preferFreeFormats: true,
-            youtubeSkipDashManifest: true
+            extractorArgs: 'youtube:player_client=android', // Disguise as an Android phone
+            cookies: cookiesPath // Pass the human verification
         });
 
         console.log(`[2/4] Success! Render now has the file. Extracting audio...`);
