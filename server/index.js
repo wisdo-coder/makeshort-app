@@ -5,6 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 console.log("TESTING API KEYS:");
 console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
 console.log("Gemini Key Found:", !!process.env.GEMINI_API_KEY);
+console.log("RapidAPI Key Found:", !!process.env.RAPIDAPI_KEY);
 
 const express = require('express');
 const http = require('http');
