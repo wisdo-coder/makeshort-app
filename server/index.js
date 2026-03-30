@@ -1,3 +1,4 @@
+// Force Deploy: Cookies Path Fix
 const path = require('path');
 // ☢️ The Nuclear Option: Force it to look in the exact right folder
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -100,7 +101,8 @@ app.post('/api/generate', async (req, res) => {
         io.emit('status-update', { message: '⬇️ Downloading high-res video from YouTube...' });
         
         // 🍪 THE FIX: Added --cookies cookies.txt right after yt-dlp
-        await runCommand(`yt-dlp --cookies cookies.txt --js-runtimes node --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4" "${videoUrl}" -o ${inputPath}`);
+        // Change this line in index.js:
+await runCommand(`yt-dlp --cookies ${path.join(__dirname, 'cookies.txt')} --js-runtimes node ...`);
         // Step 2: Extract Audio
         console.log(`[2/4] Extracting audio for Whisper...`);
         io.emit('status-update', { message: '🎵 Extracting audio for transcription...' });
