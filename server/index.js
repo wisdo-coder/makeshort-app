@@ -99,28 +99,36 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Fetching download link from API...`);
-        io.emit('status-update', { message: '🚀 Bypassing YouTube limits via API...' });
+        console.log(`[1/4] Requesting stable download link...`);
+        io.emit('status-update', { message: '🚀 Routing through high-speed bypass...' });
 
-        // 1. Call RapidAPI to get the real MP4 link
+        // NEW API: Social Download All (v1)
         const options = {
-            method: 'GET',
-            url: 'https://youtube-to-mp4-download.p.rapidapi.com/api/v1/youtube/download',
-            params: { url: videoUrl },
+            method: 'POST',
+            url: 'https://social-download-all.p.rapidapi.com/v1/social/autodownload',
             headers: {
                 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'youtube-to-mp4-download.p.rapidapi.com'
-            }
+                'X-RapidAPI-Host': 'social-download-all.p.rapidapi.com',
+                'Content-Type': 'application/json'
+            },
+            data: { url: videoUrl }
         };
 
         const apiResponse = await axios.request(options);
-        const directDownloadUrl = apiResponse.data.download_url; // Check your specific API's response format!
+        
+        // This API returns a list of formats. We want the best MP4.
+        const videoData = apiResponse.data.medias.find(m => m.extension === 'mp4' && m.quality === '720p') 
+                          || apiResponse.data.medias.find(m => m.extension === 'mp4')
+                          || apiResponse.data.medias[0];
 
-        // 2. Stream the video directly to your server's upload folder
-        console.log("Streaming video to local storage...");
+        if (!videoData || !videoData.url) {
+            throw new Error("Could not find a valid MP4 link in API response.");
+        }
+
+        console.log("Found Video Link. Streaming to server...");
         const writer = fs.createWriteStream(inputPath);
         const videoStream = await axios({
-            url: directDownloadUrl,
+            url: videoData.url,
             method: 'GET',
             responseType: 'stream'
         });
@@ -132,18 +140,48 @@ app.post('/api/generate', async (req, res) => {
             writer.on('error', reject);
         });
 
-        // --- REST OF YOUR CODE (Extraction, Whisper, Gemini) REMAINS THE SAME ---
+        // --- BACK TO NORMAL FLOW ---
         console.log(`[2/4] Extracting audio...`);
+        io.emit('status-update', { message: '🎵 Audio extraction in progress...' });
         await runCommand(`ffmpeg -i ${inputPath} -vn -ac 1 -ar 16000 -b:a 32k ${audioPath}`);
-        
-        // ... (Keep the transcription and Gemini logic below this)
-        
-        // For the sake of brevity, assume the rest of your logic follows here...
-        res.json({ success: true, message: "Video processed!" }); // Update this with your actual logic
+
+        console.log(`[3/4] Transcribing...`);
+        io.emit('status-update', { message: '🎙️ Whisper AI is listening...' });
+        const transcription = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(audioPath),
+            model: "whisper-large-v3",
+            response_format: "verbose_json",
+            timestamp_granularities: ["word"]
+        });
+
+        console.log(`[4/4] AI Analysis...`);
+        io.emit('status-update', { message: '🧠 Gemini is picking the best parts...' });
+        const highlights = await getHighlightsFromAI(transcription.text);
+
+        const draftClips = highlights.map((highlight, index) => {
+            let safeStart = parseAITime(highlight.start);
+            let safeDuration = parseAITime(highlight.duration) || 45;
+            let clipWords = transcription.words.filter(w => w.start >= safeStart && w.end <= (safeStart + safeDuration));
+
+            return {
+                id: `${videoId}-${index}`,
+                videoId,
+                sourcePath: inputPath,
+                start: safeStart,
+                duration: safeDuration,
+                title: highlight.title,
+                viralityScore: highlight.viralityScore,
+                reason: highlight.reason,
+                socialCaption: highlight.socialCaption,
+                segments: clipWords
+            };
+        });
+
+        res.json({ success: true, clips: draftClips });
 
     } catch (error) {
-        console.error("New API Download Error:", error);
-        res.status(500).json({ error: "Download failed even with API. Check RapidAPI credits." });
+        console.error("API Error Details:", error.response ? error.response.data : error.message);
+        res.status(500).json({ error: "Download path failed. Try a different video or check API credits." });
     }
 });
 
