@@ -102,7 +102,8 @@ app.post('/api/generate', async (req, res) => {
         
         // 🍪 THE FIX: Added --cookies cookies.txt right after yt-dlp
         // Change this line in index.js:
-await runCommand(`yt-dlp --cookies ${path.join(__dirname, 'cookies.txt')} --js-runtimes node ...`);
+// Copy this EXACTLY - do not leave any "..." in the string
+await runCommand(`yt-dlp --cookies ${path.join(__dirname, 'cookies.txt')} --js-runtimes node --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4" "${videoUrl}" -o ${inputPath}`);
         // Step 2: Extract Audio
         console.log(`[2/4] Extracting audio for Whisper...`);
         io.emit('status-update', { message: '🎵 Extracting audio for transcription...' });
