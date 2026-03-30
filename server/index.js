@@ -1,4 +1,5 @@
 // Force Deploy: Cookies Path Fix & Clean Imports
+const youtubedl = require('youtube-dl-exec');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -100,58 +101,18 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Fetching proxied link for ID: ${ytId}`);
-        io.emit('status-update', { message: '🚀 Routing through Proxy Network...' });
+        console.log(`[1/4] Fetching video using internal yt-dlp engine for ID: ${ytId}`);
+        io.emit('status-update', { message: '🚀 Deploying internal extraction engine...' });
 
-        // We use an array of Piped proxy instances to guarantee uptime
-        const instances = [
-            'https://pipedapi.kavin.rocks',
-            'https://pipedapi.smnz.de',
-            'https://de-api-piped.mint.lgbt'
-        ];
-
-        let downloadUrl = null;
-
-        for (const instance of instances) {
-            try {
-                console.log(`Trying proxy instance: ${instance}...`);
-                const apiResponse = await axios.get(`${instance}/streams/${ytId}`, { timeout: 10000 });
-                const streams = apiResponse.data.videoStreams || [];
-                
-                // Find a standard MP4 format that includes audio (videoOnly: false)
-                const bestFormat = streams.find(s => s.quality === '720p' && s.format === 'MPEG_4' && !s.videoOnly) 
-                                || streams.find(s => s.format === 'MPEG_4' && !s.videoOnly);
-
-                if (bestFormat && bestFormat.url) {
-                    downloadUrl = bestFormat.url; // This URL points to a proxy, NOT YouTube!
-                    console.log(`Got proxied link from ${instance}!`);
-                    break;
-                }
-            } catch (err) {
-                console.log(`Instance ${instance} busy, trying next...`);
-            }
-        }
-
-        if (!downloadUrl) throw new Error("All proxy tunnels failed to secure a link.");
-
-        console.log("Stream secured via Proxy. Downloading to Render server...");
-        
-        // Because we are hitting a proxy, YouTube doesn't see us and won't 403!
-        const response = await axios({
-            url: downloadUrl,
-            method: 'GET',
-            responseType: 'stream',
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            }
-        });
-
-        const writer = fs.createWriteStream(inputPath);
-        response.data.pipe(writer);
-
-        await new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', reject);
+        // yt-dlp handles the IP bypass, certificates, and formatting natively!
+        await youtubedl(`https://www.youtube.com/watch?v=${ytId}`, {
+            output: inputPath,
+            format: 'best[height<=720]', // Keeps file size low for faster AI processing
+            noWarnings: true,
+            noCallHome: true,
+            noCheckCertificates: true,
+            preferFreeFormats: true,
+            youtubeSkipDashManifest: true
         });
 
         console.log(`[2/4] Success! Render now has the file. Extracting audio...`);
@@ -190,7 +151,7 @@ app.post('/api/generate', async (req, res) => {
 
     } catch (error) {
         console.error("Online Error:", error.message);
-        res.status(500).json({ error: "Proxy network is currently congested. Try again in a minute." });
+        res.status(500).json({ error: "YouTube firewall blocked the request. Try a different video." });
     }
 });
 
