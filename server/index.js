@@ -171,7 +171,7 @@ app.post('/api/generate', async (req, res) => {
 // ==========================================
 app.post('/api/render', async (req, res) => {
     const { clip } = req.body;
-    const srtPath = path.join(uploadsDir, `${clip.id}.srt`);
+    const subtitlePath = path.join(uploadsDir, `${clip.id}.ass`);
     const outputPath = path.join(outputDir, `${clip.id}-final.mp4`);
 
     try {
@@ -183,13 +183,15 @@ app.post('/api/render', async (req, res) => {
         console.log("Number of words in clip:", clip.segments ? clip.segments.length : "MISSING FROM FRONTEND!");
         
         // Generate the text file
-        const srtContent = generateSRT(clip.segments || [], clip.start);
-        console.log("SRT File Preview (First 100 chars):\n", srtContent.substring(0, 100) || "[EMPTY SRT FILE]");
+        const assContent = generateASS(clip.segments || [], clip.start);
+        
+        // 🚨 FIX: Changed srtContent to assContent here!
+        console.log("ASS File Preview (First 100 chars):\n", assContent.substring(0, 100) || "[EMPTY ASS FILE]");
         console.log("===================================\n");
 
-        fs.writeFileSync(srtPath, srtContent);
-        await runFFmpegRender(clip.sourcePath, srtPath, outputPath, clip.start, clip.duration);
-
+        fs.writeFileSync(subtitlePath, assContent);
+        await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration);
+        
         res.json({ 
             success: true, 
             url: `/output/${clip.id}-final.mp4`
@@ -259,45 +261,70 @@ ${text}`;
     }
 }
 
-function generateSRT(words, clipStart = 0) {
-    let srtContent = "";
-    let chunk = [];
-    let chunkIndex = 1;
+// 🚀 V2: Word-by-Word ASS Subtitle Generator
+function generateASS(words, clipStart = 0) {
+    // This is the blueprint for a viral Shorts subtitle style
+    let assContent = `[Script Info]
+ScriptType: v4.00+
+PlayResX: 720
+PlayResY: 1280
 
-    for (let i = 0; i < words.length; i++) {
-        chunk.push(words[i]);
-        // Group words into 2 per screen (or whatever is left at the end)
-        if (chunk.length === 2 || i === words.length - 1) {
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,80,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,3,5,40,40,640,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+    const chunkSize = 3; // Show 3 words on screen at a time
+
+    for (let i = 0; i < words.length; i += chunkSize) {
+        const chunk = words.slice(i, i + chunkSize);
+        
+        // Loop through each word in the chunk to move the highlight
+        for (let j = 0; j < chunk.length; j++) {
+            const activeWord = chunk[j];
+            const startSec = Math.max(0, (activeWord.start || 0) - clipStart);
             
-            // 🚨 THE MATH FIX: Subtract the clip's start time to reset the clock to 00:00!
-            const startSec = Math.max(0, (chunk[0].start || 0) - clipStart);
-            const endSec = Math.max(0, (chunk[chunk.length - 1].end || 0) - clipStart);
+            // To prevent flickering, the subtitle stays until the NEXT word starts
+            let endSec;
+            if (j < chunk.length - 1) {
+                endSec = Math.max(0, (chunk[j + 1].start || 0) - clipStart);
+            } else {
+                endSec = Math.max(0, (activeWord.end || 0) - clipStart);
+            }
             
-            const start = formatSRTTime(startSec);
-            const end = formatSRTTime(endSec);
+            const startTime = formatASSTime(startSec);
+            const endTime = formatASSTime(endSec);
             
-            // .trim() cleans up Whisper's weird spacing
-            const text = chunk.map(w => w.word.trim()).join(" "); 
+            // Build the text line, coloring only the active word
+            let lineText = chunk.map((w, index) => {
+                const wordText = w.word.trim();
+                // &H00FFFF& is ASS code for Yellow (it reads colors backwards as Blue-Green-Red)
+                if (index === j) return `{\\c&H00FFFF&}${wordText}{\\c&HFFFFFF&}`;
+                return wordText;
+            }).join(" ");
             
-            srtContent += `${chunkIndex}\n${start} --> ${end}\n${text}\n\n`;
-            
-            chunk = [];
-            chunkIndex++;
+            assContent += `Dialogue: 0,${startTime},${endTime},Default,,0,0,0,,${lineText}\n`;
         }
     }
-    return srtContent;
+    return assContent;
 }
 
-function formatSRTTime(seconds) {
+// ASS uses a slightly different time format than SRT: H:MM:SS.cs
+function formatASSTime(seconds) {
     const date = new Date(0);
     date.setSeconds(seconds);
-    const hhmmss = date.toISOString().substr(11, 8);
-    const ms = Math.floor((seconds % 1) * 1000).toString().padStart(3, '0');
-    return `${hhmmss},${ms}`;
+    const hh = Math.floor(seconds / 3600);
+    const mm = date.toISOString().substr(14, 2);
+    const ss = date.toISOString().substr(17, 2);
+    const cs = Math.floor((seconds % 1) * 100).toString().padStart(2, '0');
+    return `${hh}:${mm}:${ss}.${cs}`;
 }
 
 // 🛠️ THE FFMPEG FIX
-function runFFmpegRender(input, srt, output, start, duration) {
+function runFFmpegRender(input, subtitleFile, output, start, duration) {
     return new Promise((resolve, reject) => {
         const outputFolder = path.dirname(output);
         if (!fs.existsSync(outputFolder)) {
@@ -305,11 +332,10 @@ function runFFmpegRender(input, srt, output, start, duration) {
         }
 
         // 🚨 MAGIC WINDOWS FIX: Use relative paths! FFmpeg on Windows hates C:/ paths for subtitles
-        const relativeSrtPath = path.relative(process.cwd(), srt).replace(/\\/g, '/');
-        console.log("FFmpeg reading subtitles from:", relativeSrtPath);
+        const relativeSubPath = path.relative(process.cwd(), subtitleFile).replace(/\\/g, '/');
+        console.log("FFmpeg reading subtitles from:", relativeSubPath);
         
-        // Escape all commas in the styling so it doesn't crash the filter chain
-        const style = "Alignment=5\\,FontSize=80\\,PrimaryColour=&H00FFFF\\,OutlineColour=&H00000000\\,BorderStyle=1\\,Outline=4\\,Shadow=3\\,Bold=-1\\,MarginV=0\\,MarginL=40\\,MarginR=40";
+        // 🗑️ We deleted the "const style" line here because ASS files handle their own styling!
 
         ffmpeg(input)
             .setStartTime(start)
@@ -317,7 +343,8 @@ function runFFmpegRender(input, srt, output, start, duration) {
             .videoFilters([
                 'crop=ih*(9/16):ih', 
                 'scale=720:1280',    
-                `subtitles='${relativeSrtPath}':force_style='${style}'`
+                // 🚨 No more force_style needed!
+                `subtitles='${relativeSubPath}'` 
             ])
             .outputOptions(['-c:v libx264', '-preset fast', '-crf 22', '-c:a copy'])
             .on('progress', (progress) => {
