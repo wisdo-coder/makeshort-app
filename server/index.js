@@ -98,31 +98,41 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 
-app.post('/api/generate', async (req, res) => {
+aapp.post('/api/generate', async (req, res) => {
     const { videoUrl } = req.body;
-    const videoIdMatch = videoUrl.match(/(?:https?:\/\/)?(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w-]{11})/);
-    const ytId = videoIdMatch ? videoIdMatch[1] : null;
-
     const videoId = Date.now();
     const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
+    const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Using Invidious Shield for ID: ${ytId}`);
-        io.emit('status-update', { message: '🛡️ Routing through encrypted shield...' });
+        console.log(`[1/4] Fetching Clean Link for: ${videoUrl}`);
+        io.emit('status-update', { message: '🚀 Routing through Global Bypass...' });
 
-        // We fetch the stream from a public Invidious instance (they rotate IPs)
-        const instance = "https://invidious.projectsegfau.lt"; 
-        const streamUrl = `${instance}/latest_version?id=${ytId}&itag=22`; // itag 22 is 720p MP4
-
-        console.log("Streaming from shield server...");
-        const response = await axios({
-            method: 'get',
-            url: streamUrl,
-            responseType: 'stream',
-            maxRedirects: 5,
+        // 1. Get the direct MP4 URL from the specialized API
+        const apiOptions = {
+            method: 'GET',
+            url: 'https://youtube-video-download-6.p.rapidapi.com/video/',
+            params: { url: videoUrl },
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+                'X-RapidAPI-Host': 'youtube-video-download-6.p.rapidapi.com'
             }
+        };
+
+        const apiResponse = await axios.request(apiOptions);
+        
+        // This API returns an array of 'formats'. We want the best MP4.
+        const bestMp4 = apiResponse.data.formats.find(f => f.ext === 'mp4' && f.protocol === 'https') || apiResponse.data.formats[0];
+        const downloadUrl = bestMp4.url;
+
+        console.log("Stream secured. Pulling to Render server...");
+        
+        // 2. Download that clean link to your server
+        const response = await axios({
+            url: downloadUrl,
+            method: 'GET',
+            responseType: 'stream',
+            headers: { 'User-Agent': 'Mozilla/5.0' }
         });
 
         const writer = fs.createWriteStream(inputPath);
@@ -133,12 +143,14 @@ app.post('/api/generate', async (req, res) => {
             writer.on('error', reject);
         });
 
-        console.log(`[2/4] Shield Download Success!`);
-        // ... (Rest of FFMPEG / Gemini code)
+        console.log(`[2/4] Success! Render now has the file. Extracting audio...`);
+        
+        // --- YOUR WHISPER & GEMINI CODE STARTS HERE ---
+        // (This part already works on Render because it doesn't talk to YouTube!)
 
     } catch (error) {
-        console.error("Shield Error:", error.message);
-        res.status(500).json({ error: "YouTube has blocked this data center globally. We need a private proxy." });
+        console.error("Online Error:", error.message);
+        res.status(500).json({ error: "External API limit reached or YouTube updated. Check RapidAPI credits." });
     }
 });
 
