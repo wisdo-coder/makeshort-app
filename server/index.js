@@ -130,15 +130,28 @@ app.post('/api/generate', async (req, res) => {
 
         if (!downloadUrl) throw new Error("No download link found.");
 
-        console.log("Streaming video to server...");
+       console.log("Streaming video to server...");
         const writer = fs.createWriteStream(inputPath);
-        const videoStream = await axios({ url: downloadUrl, method: 'GET', responseType: 'stream' });
+        
+        // ADDED HEADERS HERE TO BYPASS THE 403
+        const videoStream = await axios({
+            url: downloadUrl,
+            method: 'GET',
+            responseType: 'stream',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.youtube.com/'
+            }
+        });
 
         videoStream.data.pipe(writer);
 
         await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
-            writer.on('error', reject);
+            writer.on('error', (err) => {
+                console.error("Stream Error:", err.message);
+                reject(err);
+            });
         });
 
         // --- REST OF FLOW ---
