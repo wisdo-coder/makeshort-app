@@ -5,8 +5,13 @@ import SubtitleEditor from './components/SubtitleEditor';
 import ProgressBar from './components/ProgressBar';
 import gsap from 'gsap';
 
-// 🪄 THE MAGIC FIX: Automatically detects your device's IP or localhost!
-const API_URL = `http://${window.location.hostname}:5000`;
+// 🌍 THE CLOUD FIX: Automatically switch between Local and Live Server!
+const isLocal = window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168');
+
+// Replace the fallback string with your actual Render URL!
+const API_URL = isLocal 
+  ? `http://${window.location.hostname}:5000` 
+  : 'https://makeshort-backend.onrender.com';
 
 function App() {
   const [url, setUrl] = useState('');
