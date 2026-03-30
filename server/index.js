@@ -98,7 +98,7 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 
-aapp.post('/api/generate', async (req, res) => {
+app.post('/api/generate', async (req, res) => {
     const { videoUrl } = req.body;
     const videoId = Date.now();
     const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
