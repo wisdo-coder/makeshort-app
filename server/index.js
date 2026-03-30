@@ -92,6 +92,8 @@ app.post('/api/cleanup', (req, res) => {
 // Add 'axios' to the top of your index.js if it's not there
 const axios = require('axios');
 
+const ytdl = require('@distube/ytdl-core');
+
 app.post('/api/generate', async (req, res) => {
     const { videoUrl } = req.body;
     const videoId = Date.now();
@@ -99,48 +101,39 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Requesting Cobalt bypass for: ${videoUrl}`);
-        io.emit('status-update', { message: '🚀 Initializing Cobalt Tunnel...' });
+        console.log(`[1/4] Starting Stealth Download for: ${videoUrl}`);
+        io.emit('status-update', { message: '🚀 Engaging Stealth Bypass...' });
 
-        // Using a reliable public Cobalt instance
-        const cobaltResponse = await axios.post('https://api.cobalt.tools/api/json', {
-            url: videoUrl,
-            vQuality: '720',
-            filenameStyle: 'nerdy'
-        }, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'Referer': 'https://cobalt.tools/'
-            }
-        });
+        // Create a custom agent to mimic a mobile phone browser
+        const agent = ytdl.createAgent([
+            { name: "User-Agent", value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1" }
+        ]);
 
-        const downloadUrl = cobaltResponse.data.url;
-        if (!downloadUrl) throw new Error("Cobalt didn't return a URL. Video might be too long or restricted.");
-
-        console.log("Streaming direct from Cobalt...");
-        const response = await axios({
-            method: 'get',
-            url: downloadUrl,
-            responseType: 'stream'
+        const downloadStream = ytdl(videoUrl, {
+            agent,
+            quality: 'highestvideo',
+            filter: format => format.container === 'mp4' && format.hasAudio && format.hasVideo
         });
 
         const writer = fs.createWriteStream(inputPath);
-        response.data.pipe(writer);
+        downloadStream.pipe(writer);
 
         await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
+            downloadStream.on('error', reject);
             writer.on('error', reject);
         });
 
-        console.log(`[2/4] Success! Moving to Audio Extraction...`);
-        // ... (The rest of your FFMPEG / Whisper / Gemini code stays the same)
-        
-        res.json({ success: true, message: "Processing..." });
+        console.log(`[2/4] Download Complete. Extracting audio...`);
+        // ... (FFMPEG, Whisper, Gemini code remains same)
+
+        res.json({ success: true, message: "Processing successful!" });
 
     } catch (error) {
-        console.error("Cobalt Error:", error.response?.data || error.message);
-        res.status(500).json({ error: "All download paths blocked. YouTube is winning today. Try again in 10 mins." });
+        console.error("Stealth Error:", error.message);
+        res.status(500).json({ 
+            error: "YouTube is blocking the data center. Please try a different video URL (not a Short) or wait 5 minutes." 
+        });
     }
 });
 
