@@ -95,11 +95,12 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        // Step 1: Download
+       // Step 1: Download
         console.log(`[1/4] Downloading YouTube video...`);
         io.emit('status-update', { message: '⬇️ Downloading high-res video from YouTube...' });
-        await runCommand(`yt-dlp --js-runtimes node --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4" "${videoUrl}" -o ${inputPath}`);
-
+        
+        // 🍪 THE FIX: Added --cookies cookies.txt right after yt-dlp
+        await runCommand(`yt-dlp --cookies cookies.txt --js-runtimes node --remote-components ejs:github -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4" "${videoUrl}" -o ${inputPath}`);
         // Step 2: Extract Audio
         console.log(`[2/4] Extracting audio for Whisper...`);
         io.emit('status-update', { message: '🎵 Extracting audio for transcription...' });
