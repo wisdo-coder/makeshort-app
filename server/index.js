@@ -1,6 +1,5 @@
-// Force Deploy: Cookies Path Fix
+// Force Deploy: Cookies Path Fix & Clean Imports
 const path = require('path');
-// ☢️ The Nuclear Option: Force it to look in the exact right folder
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 console.log("TESTING API KEYS:");
@@ -15,6 +14,7 @@ const { exec } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
 const OpenAI = require('openai');
 const fs = require('fs');
+const axios = require('axios'); // Moved up here!
 const { GoogleGenAI } = require('@google/genai');
 
 // 🧠 THE BRAIN: Gemini 2.5 Flash for finding viral highlights
@@ -31,7 +31,6 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-
 
 // Helper to force ANY weird AI time format into pure seconds
 function parseAITime(timeVal) {
@@ -58,11 +57,8 @@ const io = new Server(server, {
 
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-
-// Expose the 'output' folder so the React video player can see the MP4s
 app.use('/output', express.static(outputDir));
 
-// WebSocket connection for real-time progress
 io.on('connection', (socket) => {
     console.log('Client connected for WebSocket updates');
 });
@@ -89,50 +85,55 @@ app.post('/api/cleanup', (req, res) => {
 // ==========================================
 // ROUTE 1: DRAFTING (Download & AI Analysis)
 // ==========================================
-// Add 'axios' to the top of your index.js if it's not there
-const axios = require('axios');
-
-const ytdl = require('@distube/ytdl-core');
-
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-puppeteer.use(StealthPlugin());
-
 app.post('/api/generate', async (req, res) => {
     const { videoUrl } = req.body;
+    
+    // Extract YouTube ID properly
+    const videoIdMatch = videoUrl.match(/(?:https?:\/\/)?(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w-]{11})/);
+    const ytId = videoIdMatch ? videoIdMatch[1] : null;
+
+    if (!ytId) return res.status(400).json({ error: "Invalid YouTube URL" });
+
     const videoId = Date.now();
     const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Fetching Clean Link for: ${videoUrl}`);
-        io.emit('status-update', { message: '🚀 Routing through Global Bypass...' });
+        console.log(`[1/4] Fetching stabilized link for ID: ${ytId}`);
+        io.emit('status-update', { message: '🚀 Routing through Premium Tunnel...' });
 
-        // 1. Get the direct MP4 URL from the specialized API
-        const apiOptions = {
+        // Call the Gold Standard API (yt-api)
+        const options = {
             method: 'GET',
-            url: 'https://youtube-video-download-6.p.rapidapi.com/video/',
-            params: { url: videoUrl },
+            url: 'https://yt-api.p.rapidapi.com/dl',
+            params: { id: ytId },
             headers: {
                 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'youtube-video-download-6.p.rapidapi.com'
+                'X-RapidAPI-Host': 'yt-api.p.rapidapi.com'
             }
         };
 
-        const apiResponse = await axios.request(apiOptions);
+        const apiResponse = await axios.request(options);
         
-        // This API returns an array of 'formats'. We want the best MP4.
-        const bestMp4 = apiResponse.data.formats.find(f => f.ext === 'mp4' && f.protocol === 'https') || apiResponse.data.formats[0];
-        const downloadUrl = bestMp4.url;
+        const formats = apiResponse.data.formats || [];
+        const bestFormat = formats.find(f => f.qualityLabel === '720p' && f.mimeType.includes('video/mp4')) 
+                           || formats.find(f => f.mimeType.includes('video/mp4'))
+                           || apiResponse.data.link;
 
-        console.log("Stream secured. Pulling to Render server...");
+        const downloadUrl = typeof bestFormat === 'string' ? bestFormat : bestFormat?.url;
+
+        if (!downloadUrl) throw new Error("No download link found in API response.");
+
+        console.log("Stream secured. Downloading to server...");
         
-        // 2. Download that clean link to your server
         const response = await axios({
             url: downloadUrl,
             method: 'GET',
             responseType: 'stream',
-            headers: { 'User-Agent': 'Mozilla/5.0' }
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://youtube.com/'
+            }
         });
 
         const writer = fs.createWriteStream(inputPath);
@@ -145,12 +146,41 @@ app.post('/api/generate', async (req, res) => {
 
         console.log(`[2/4] Success! Render now has the file. Extracting audio...`);
         
-        // --- YOUR WHISPER & GEMINI CODE STARTS HERE ---
-        // (This part already works on Render because it doesn't talk to YouTube!)
+        await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
+
+        console.log(`[3/4] Transcribing with Whisper...`);
+        const transcription = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(audioPath),
+            model: "whisper-large-v3",
+            response_format: "verbose_json",
+            timestamp_granularities: ["word"]
+        });
+
+        console.log(`[4/4] AI Analysis with Gemini...`);
+        const highlights = await getHighlightsFromAI(transcription.text);
+
+        const draftClips = highlights.map((highlight, index) => {
+            let safeStart = parseAITime(highlight.start);
+            let safeDuration = parseAITime(highlight.duration) || 45;
+            return {
+                id: `${videoId}-${index}`,
+                videoId,
+                sourcePath: inputPath,
+                start: safeStart,
+                duration: safeDuration,
+                title: highlight.title,
+                viralityScore: highlight.viralityScore,
+                reason: highlight.reason,
+                socialCaption: highlight.socialCaption,
+                segments: transcription.words.filter(w => w.start >= safeStart && w.end <= (safeStart + safeDuration))
+            };
+        });
+
+        res.json({ success: true, clips: draftClips });
 
     } catch (error) {
         console.error("Online Error:", error.message);
-        res.status(500).json({ error: "External API limit reached or YouTube updated. Check RapidAPI credits." });
+        res.status(500).json({ error: "The tunnel is blocked. Please check your RapidAPI subscription." });
     }
 });
 
@@ -163,17 +193,14 @@ app.post('/api/render', async (req, res) => {
     const outputPath = path.join(outputDir, `${clip.id}-final.mp4`);
 
     try {
-        // 🕵️‍♂️ OGA TROUBLESHOOTING LOGS: Let's see if the words arrived!
         console.log("\n===================================");
         console.log("🕵️‍♂️ SUBTITLE DEBUGGER:");
         console.log("Clip ID:", clip.id);
         console.log("Does clip have segments?:", !!clip.segments);
         console.log("Number of words in clip:", clip.segments ? clip.segments.length : "MISSING FROM FRONTEND!");
         
-        // Generate the text file
         const assContent = generateASS(clip.segments || [], clip.start);
         
-        // 🚨 FIX: Changed srtContent to assContent here!
         console.log("ASS File Preview (First 100 chars):\n", assContent.substring(0, 100) || "[EMPTY ASS FILE]");
         console.log("===================================\n");
 
@@ -217,7 +244,6 @@ function runCommand(cmd) {
     });
 }
 
-// 🧠 GEMINI HIGHLIGHT EXTRACTION
 async function getHighlightsFromAI(text) {
     const prompt = `You are an elite TikTok/YouTube Shorts algorithm strategist. Analyze this video transcript and extract the 3 most viral, highly engaging segments.
 
@@ -237,7 +263,7 @@ ${text}`;
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
-                responseMimeType: "application/json", // Forces perfect JSON every time
+                responseMimeType: "application/json",
             }
         });
 
@@ -249,9 +275,7 @@ ${text}`;
     }
 }
 
-// 🚀 V2: Word-by-Word ASS Subtitle Generator
 function generateASS(words, clipStart = 0) {
-    // This is the blueprint for a viral Shorts subtitle style
     let assContent = `[Script Info]
 ScriptType: v4.00+
 PlayResX: 720
@@ -265,17 +289,15 @@ Style: Default,Arial,80,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
-    const chunkSize = 3; // Show 3 words on screen at a time
+    const chunkSize = 3; 
 
     for (let i = 0; i < words.length; i += chunkSize) {
         const chunk = words.slice(i, i + chunkSize);
         
-        // Loop through each word in the chunk to move the highlight
         for (let j = 0; j < chunk.length; j++) {
             const activeWord = chunk[j];
             const startSec = Math.max(0, (activeWord.start || 0) - clipStart);
             
-            // To prevent flickering, the subtitle stays until the NEXT word starts
             let endSec;
             if (j < chunk.length - 1) {
                 endSec = Math.max(0, (chunk[j + 1].start || 0) - clipStart);
@@ -286,10 +308,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             const startTime = formatASSTime(startSec);
             const endTime = formatASSTime(endSec);
             
-            // Build the text line, coloring only the active word
             let lineText = chunk.map((w, index) => {
                 const wordText = w.word.trim();
-                // &H00FFFF& is ASS code for Yellow (it reads colors backwards as Blue-Green-Red)
                 if (index === j) return `{\\c&H00FFFF&}${wordText}{\\c&HFFFFFF&}`;
                 return wordText;
             }).join(" ");
@@ -300,7 +320,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return assContent;
 }
 
-// ASS uses a slightly different time format than SRT: H:MM:SS.cs
 function formatASSTime(seconds) {
     const date = new Date(0);
     date.setSeconds(seconds);
@@ -311,7 +330,6 @@ function formatASSTime(seconds) {
     return `${hh}:${mm}:${ss}.${cs}`;
 }
 
-// 🛠️ THE FFMPEG FIX
 function runFFmpegRender(input, subtitleFile, output, start, duration) {
     return new Promise((resolve, reject) => {
         const outputFolder = path.dirname(output);
@@ -319,19 +337,15 @@ function runFFmpegRender(input, subtitleFile, output, start, duration) {
             fs.mkdirSync(outputFolder, { recursive: true });
         }
 
-        // 🚨 MAGIC WINDOWS FIX: Use relative paths! FFmpeg on Windows hates C:/ paths for subtitles
         const relativeSubPath = path.relative(process.cwd(), subtitleFile).replace(/\\/g, '/');
         console.log("FFmpeg reading subtitles from:", relativeSubPath);
         
-        // 🗑️ We deleted the "const style" line here because ASS files handle their own styling!
-
         ffmpeg(input)
             .setStartTime(start)
             .setDuration(duration)
             .videoFilters([
                 'crop=ih*(9/16):ih', 
                 'scale=720:1280',    
-                // 🚨 No more force_style needed!
                 `subtitles='${relativeSubPath}'` 
             ])
             .outputOptions(['-c:v libx264', '-preset fast', '-crf 22', '-c:a copy'])
