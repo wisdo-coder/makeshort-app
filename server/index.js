@@ -100,40 +100,49 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Fetching stabilized link for ID: ${ytId}`);
-        io.emit('status-update', { message: '🚀 Routing through Premium Tunnel...' });
+        console.log(`[1/4] Fetching proxied link for ID: ${ytId}`);
+        io.emit('status-update', { message: '🚀 Routing through Proxy Network...' });
 
-        // Call the Gold Standard API (yt-api)
-        const options = {
-            method: 'GET',
-            url: 'https://yt-api.p.rapidapi.com/dl',
-            params: { id: ytId },
-            headers: {
-                'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'yt-api.p.rapidapi.com'
+        // We use an array of Piped proxy instances to guarantee uptime
+        const instances = [
+            'https://pipedapi.kavin.rocks',
+            'https://pipedapi.smnz.de',
+            'https://de-api-piped.mint.lgbt'
+        ];
+
+        let downloadUrl = null;
+
+        for (const instance of instances) {
+            try {
+                console.log(`Trying proxy instance: ${instance}...`);
+                const apiResponse = await axios.get(`${instance}/streams/${ytId}`, { timeout: 10000 });
+                const streams = apiResponse.data.videoStreams || [];
+                
+                // Find a standard MP4 format that includes audio (videoOnly: false)
+                const bestFormat = streams.find(s => s.quality === '720p' && s.format === 'MPEG_4' && !s.videoOnly) 
+                                || streams.find(s => s.format === 'MPEG_4' && !s.videoOnly);
+
+                if (bestFormat && bestFormat.url) {
+                    downloadUrl = bestFormat.url; // This URL points to a proxy, NOT YouTube!
+                    console.log(`Got proxied link from ${instance}!`);
+                    break;
+                }
+            } catch (err) {
+                console.log(`Instance ${instance} busy, trying next...`);
             }
-        };
+        }
 
-        const apiResponse = await axios.request(options);
+        if (!downloadUrl) throw new Error("All proxy tunnels failed to secure a link.");
+
+        console.log("Stream secured via Proxy. Downloading to Render server...");
         
-        const formats = apiResponse.data.formats || [];
-        const bestFormat = formats.find(f => f.qualityLabel === '720p' && f.mimeType.includes('video/mp4')) 
-                           || formats.find(f => f.mimeType.includes('video/mp4'))
-                           || apiResponse.data.link;
-
-        const downloadUrl = typeof bestFormat === 'string' ? bestFormat : bestFormat?.url;
-
-        if (!downloadUrl) throw new Error("No download link found in API response.");
-
-        console.log("Stream secured. Downloading to server...");
-        
+        // Because we are hitting a proxy, YouTube doesn't see us and won't 403!
         const response = await axios({
             url: downloadUrl,
             method: 'GET',
             responseType: 'stream',
             headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://youtube.com/'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
             }
         });
 
@@ -181,7 +190,7 @@ app.post('/api/generate', async (req, res) => {
 
     } catch (error) {
         console.error("Online Error:", error.message);
-        res.status(500).json({ error: "The tunnel is blocked. Please check your RapidAPI subscription." });
+        res.status(500).json({ error: "Proxy network is currently congested. Try again in a minute." });
     }
 });
 
