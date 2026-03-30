@@ -94,44 +94,45 @@ const axios = require('axios');
 
 app.post('/api/generate', async (req, res) => {
     const { videoUrl } = req.body;
+    const videoIdMatch = videoUrl.match(/(?:https?:\/\/)?(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w-]{11})/);
+    const ytId = videoIdMatch ? videoIdMatch[1] : null;
+
+    if (!ytId) return res.status(400).json({ error: "Invalid YouTube URL" });
+
     const videoId = Date.now();
     const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/4] Requesting stable download link...`);
-        io.emit('status-update', { message: '🚀 Routing through high-speed bypass...' });
+        console.log(`[1/4] Fetching download link for ID: ${ytId}...`);
+        io.emit('status-update', { message: '🚀 Routing through Premium Bypass...' });
 
-        // NEW API: Social Download All (v1)
+        // NEW API: yt-api (The most stable one)
         const options = {
-            method: 'POST',
-            url: 'https://social-download-all.p.rapidapi.com/v1/social/autodownload',
+            method: 'GET',
+            url: 'https://yt-api.p.rapidapi.com/dl',
+            params: { id: ytId },
             headers: {
                 'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-                'X-RapidAPI-Host': 'social-download-all.p.rapidapi.com',
-                'Content-Type': 'application/json'
-            },
-            data: { url: videoUrl }
+                'X-RapidAPI-Host': 'yt-api.p.rapidapi.com'
+            }
         };
 
         const apiResponse = await axios.request(options);
         
-        // This API returns a list of formats. We want the best MP4.
-        const videoData = apiResponse.data.medias.find(m => m.extension === 'mp4' && m.quality === '720p') 
-                          || apiResponse.data.medias.find(m => m.extension === 'mp4')
-                          || apiResponse.data.medias[0];
+        // This API returns 'link' or formats. We want a direct MP4.
+        const formats = apiResponse.data.formats || [];
+        const bestFormat = formats.find(f => f.qualityLabel === '720p' && f.mimeType.includes('video/mp4')) 
+                           || formats.find(f => f.mimeType.includes('video/mp4'))
+                           || apiResponse.data.link;
 
-        if (!videoData || !videoData.url) {
-            throw new Error("Could not find a valid MP4 link in API response.");
-        }
+        const downloadUrl = typeof bestFormat === 'string' ? bestFormat : bestFormat.url;
 
-        console.log("Found Video Link. Streaming to server...");
+        if (!downloadUrl) throw new Error("No download link found.");
+
+        console.log("Streaming video to server...");
         const writer = fs.createWriteStream(inputPath);
-        const videoStream = await axios({
-            url: videoData.url,
-            method: 'GET',
-            responseType: 'stream'
-        });
+        const videoStream = await axios({ url: downloadUrl, method: 'GET', responseType: 'stream' });
 
         videoStream.data.pipe(writer);
 
@@ -140,13 +141,11 @@ app.post('/api/generate', async (req, res) => {
             writer.on('error', reject);
         });
 
-        // --- BACK TO NORMAL FLOW ---
+        // --- REST OF FLOW ---
         console.log(`[2/4] Extracting audio...`);
-        io.emit('status-update', { message: '🎵 Audio extraction in progress...' });
         await runCommand(`ffmpeg -i ${inputPath} -vn -ac 1 -ar 16000 -b:a 32k ${audioPath}`);
 
-        console.log(`[3/4] Transcribing...`);
-        io.emit('status-update', { message: '🎙️ Whisper AI is listening...' });
+        console.log(`[3/4] Transcription...`);
         const transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(audioPath),
             model: "whisper-large-v3",
@@ -155,14 +154,11 @@ app.post('/api/generate', async (req, res) => {
         });
 
         console.log(`[4/4] AI Analysis...`);
-        io.emit('status-update', { message: '🧠 Gemini is picking the best parts...' });
         const highlights = await getHighlightsFromAI(transcription.text);
 
         const draftClips = highlights.map((highlight, index) => {
             let safeStart = parseAITime(highlight.start);
             let safeDuration = parseAITime(highlight.duration) || 45;
-            let clipWords = transcription.words.filter(w => w.start >= safeStart && w.end <= (safeStart + safeDuration));
-
             return {
                 id: `${videoId}-${index}`,
                 videoId,
@@ -173,15 +169,15 @@ app.post('/api/generate', async (req, res) => {
                 viralityScore: highlight.viralityScore,
                 reason: highlight.reason,
                 socialCaption: highlight.socialCaption,
-                segments: clipWords
+                segments: transcription.words.filter(w => w.start >= safeStart && w.end <= (safeStart + safeDuration))
             };
         });
 
         res.json({ success: true, clips: draftClips });
 
     } catch (error) {
-        console.error("API Error Details:", error.response ? error.response.data : error.message);
-        res.status(500).json({ error: "Download path failed. Try a different video or check API credits." });
+        console.error("API Error:", error.message);
+        res.status(500).json({ error: "Download failed. Make sure you are SUBSCRIBED to 'yt-api' on RapidAPI." });
     }
 });
 
