@@ -26,7 +26,10 @@ function App() {
 
   // 3. Add this exact useEffect to listen to the backend
   useEffect(() => {
-    const socket = io(API_URL);
+    // Force it to use the live Render URL
+    const socket = io('https://makeshort-backend.onrender.com', {
+        transports: ['websocket', 'polling'] // This helps bypass strict cloud firewalls
+    });
     
     socket.on('render-progress', (data) => {
       setRenderProgress(data.percent);
