@@ -1,12 +1,9 @@
-// Force Deploy: Cookies Path Fix & Clean Imports
-const youtubedl = require('youtube-dl-exec');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 console.log("TESTING API KEYS:");
 console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
 console.log("Gemini Key Found:", !!process.env.GEMINI_API_KEY);
-console.log("RapidAPI Key Found:", !!process.env.RAPIDAPI_KEY);
 
 const express = require('express');
 const http = require('http');
@@ -16,8 +13,9 @@ const { exec } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
 const OpenAI = require('openai');
 const fs = require('fs');
-const axios = require('axios'); // Moved up here!
+const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
+const multer = require('multer'); // Brought in Multer for the Heist
 
 // 🧠 THE BRAIN: Gemini 2.5 Flash for finding viral highlights
 const ai = new GoogleGenAI({}); 
@@ -33,6 +31,17 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+// Configure Multer to save uploaded files from the Extension
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`);
+    }
+});
+const upload = multer({ storage: storage });
 
 // Helper to force ANY weird AI time format into pure seconds
 function parseAITime(timeVal) {
@@ -85,42 +94,26 @@ app.post('/api/cleanup', (req, res) => {
 });
 
 // ==========================================
-// ROUTE 1: DRAFTING (Download & AI Analysis)
+// ROUTE 1: UPLOAD & AI ANALYSIS (The New Way)
 // ==========================================
-app.post('/api/generate', async (req, res) => {
-    const { videoUrl } = req.body;
-    
-    // Extract YouTube ID properly
-    const videoIdMatch = videoUrl.match(/(?:https?:\/\/)?(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w-]{11})/);
-    const ytId = videoIdMatch ? videoIdMatch[1] : null;
+app.post('/api/upload', upload.single('video'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: "No video file uploaded." });
+    }
 
-    if (!ytId) return res.status(400).json({ error: "Invalid YouTube URL" });
-
-    const videoId = Date.now();
-    const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
+    const inputPath = req.file.path;
+    const videoId = path.parse(req.file.filename).name;
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
-    const cookiesPath = path.join(__dirname, 'cookies.txt');
 
     try {
-       console.log(`[1/4] Fetching video using internal yt-dlp engine for ID: ${ytId}`);
-        io.emit('status-update', { message: '🚀 Deploying internal extraction engine...' });
-
-        // The Bulletproof Config
-        await youtubedl(`https://www.youtube.com/watch?v=${ytId}`, {
-            output: inputPath,
-            format: 'best[height<=720]', 
-            noWarnings: true,
-            noCheckCertificates: true,
-            preferFreeFormats: true,
-            extractorArgs: 'youtube:player_client=android', // Disguise as an Android phone
-            cookies: cookiesPath // Pass the human verification
-        });
-
-        console.log(`[2/4] Success! Render now has the file. Extracting audio...`);
+        console.log(`[1/3] Video received from extension! Extracting audio...`);
+        io.emit('status-update', { message: '🚀 Video received! Extracting audio...' });
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        console.log(`[3/4] Transcribing with Whisper...`);
+        console.log(`[2/3] Transcribing with Whisper...`);
+        io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
+        
         const transcription = await openai.audio.transcriptions.create({
             file: fs.createReadStream(audioPath),
             model: "whisper-large-v3",
@@ -128,7 +121,9 @@ app.post('/api/generate', async (req, res) => {
             timestamp_granularities: ["word"]
         });
 
-        console.log(`[4/4] AI Analysis with Gemini...`);
+        console.log(`[3/3] AI Analysis with Gemini...`);
+        io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
+        
         const highlights = await getHighlightsFromAI(transcription.text);
 
         const draftClips = highlights.map((highlight, index) => {
@@ -151,8 +146,8 @@ app.post('/api/generate', async (req, res) => {
         res.json({ success: true, clips: draftClips });
 
     } catch (error) {
-        console.error("Online Error:", error.message);
-        res.status(500).json({ error: "YouTube firewall blocked the request. Try a different video." });
+        console.error("Backend Error:", error.message);
+        res.status(500).json({ error: "AI Processing failed on the server." });
     }
 });
 
