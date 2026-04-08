@@ -15,28 +15,25 @@ const API_URL = isLocal
   : 'https://makeshort-backend.onrender.com';
 
 function App() {
-  const [url, setUrl] = useState('');
+  // 🔴 1. Changed 'url' to 'videoFile'
+  const [videoFile, setVideoFile] = useState(null);
   const [step, setStep] = useState('idle'); 
   const [clips, setClips] = useState([]);
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   
-  // 2. Add this new state for the progress bar!
   const [renderProgress, setRenderProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
 
-  // 3. Add this exact useEffect to listen to the backend
   useEffect(() => {
-    // Force it to use the live Render URL
     const socket = io('https://makeshort-backend.onrender.com', {
-        transports: ['websocket', 'polling'] // This helps bypass strict cloud firewalls
+        transports: ['websocket', 'polling']
     });
     
     socket.on('render-progress', (data) => {
       setRenderProgress(data.percent);
     });
     
-    // Listen for the live FFmpeg rendering percentage
   socket.on('status-update', (data) => {
       setStatusMessage(data.message);
     });
@@ -44,15 +41,20 @@ function App() {
     return () => socket.disconnect();
   }, []);
 
-  // Step 1: Send URL to Backend for AI Analysis
+  // 🔴 2. Updated to send FormData instead of JSON
   const handleGenerate = async () => {
-    if (!url) return alert("Please enter a YouTube URL");
+    if (!videoFile) return alert("Please select a video file first!");
     
     setStep('processing');
     try {
-      const { data } = await axios.post(`${API_URL}/api/generate`, { videoUrl: url });
+      // Pack the file for shipping to the backend
+      const formData = new FormData();
+      formData.append('videoFile', videoFile); 
+
+      // Axios automatically handles the multipart/form-data headers!
+      const { data } = await axios.post(`${API_URL}/api/generate`, formData);
       setClips(data.clips);
-      setStep('editing'); // Move to the subtitle editor
+      setStep('editing'); 
     } catch (err) {
       console.error(err);
       alert("Error processing video. Check console.");
@@ -60,7 +62,6 @@ function App() {
     }
   };
 
-  // Step 2: Send edited clip back to FFmpeg for Rendering
   const handleRender = async (editedClip) => {
     setStep('rendering');
     try {
@@ -76,27 +77,21 @@ function App() {
 
   const handleStartOver = async () => {
     try {
-      // Tell backend to delete files
       await axios.post(`${API_URL}/api/cleanup`);
     } catch (err) {
       console.error("Cleanup failed", err);
     }
-    // Reset the frontend
-    setUrl('');
+    // 🔴 3. Clear the file state
+    setVideoFile(null);
     setClips([]);
     setFinalVideoUrl('');
     setStep('idle');
   };
 
-  // 1. Create a reference for the main container
   const mainContainerRef = useRef(null);
-
-  // 2. Trigger the GSAP animation when the app loads
 
   useEffect(() => {
     if (!mainContainerRef.current) return;
-
-    // Wrap the animation in a context
     let ctx = gsap.context(() => {
       gsap.from(mainContainerRef.current, {
         y: 50,
@@ -105,14 +100,10 @@ function App() {
         ease: "power3.out"
       });
     });
-
-    // THIS is the magic line that fixes the dark screen bug
     return () => ctx.revert(); 
-    
   }, []);
 
   return (
-    // 👇 THIS IS WHERE IT GOES! The ref is attached to this outermost div
     <div ref={mainContainerRef} className="min-h-screen bg-gray-950 text-white font-sans selection:bg-blue-500 selection:text-white">
       <div className="max-w-5xl mx-auto px-6 py-12">
         
@@ -121,26 +112,34 @@ function App() {
           <h1 className="text-5xl font-extrabold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
             MakeShort MVP
           </h1>
-          <p className="text-gray-400 mt-4 text-lg">Turn long-form YouTube videos into viral Shorts in 1-click.</p>
+          <p className="text-gray-400 mt-4 text-lg">Turn your raw videos into viral Shorts in 1-click.</p>
         </header>
 
         {/* State 1: Idle Input */}
         {step === 'idle' && (
           <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">YouTube URL</label>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Upload Raw Video</label>
+              {/* 🔴 4. Changed the text input to a beautifully styled file input */}
               <input 
-                className="w-full p-4 rounded-xl bg-gray-950 border border-gray-700 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                placeholder="https://www.youtube.com/watch?v=..."
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                type="file"
+                accept="video/mp4,video/quicktime,video/*"
+                onChange={(e) => setVideoFile(e.target.files[0])}
+                className="block w-full text-sm text-gray-400
+                  file:mr-4 file:py-3 file:px-6
+                  file:rounded-xl file:border-0
+                  file:text-sm file:font-bold
+                  file:bg-gray-800 file:text-white
+                  hover:file:bg-gray-700
+                  file:transition-all file:cursor-pointer
+                  bg-gray-950 border border-gray-700 rounded-xl p-2 cursor-pointer focus:outline-none focus:border-blue-500 transition"
               />
             </div>
             <button 
               onClick={handleGenerate}
               className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-600/20"
             >
-              Generate AI Shorts 🚀
+              Upload & Generate AI Shorts 🚀
             </button>
           </div>
         )}
@@ -149,9 +148,8 @@ function App() {
         {step === 'processing' && (
           <div className="text-center py-20 animate-pulse">
             <div className="inline-block w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-            <h2 className="text-2xl font-bold text-gray-100 mb-4">AI is analyzing the video...</h2>
+            <h2 className="text-2xl font-bold text-gray-100 mb-4">Processing Video...</h2>
             
-            {/* 🔴 LIVE STATUS MESSAGE HERE */}
             <div className="bg-gray-800/50 inline-block px-6 py-3 rounded-full border border-gray-700">
               <p className="text-blue-400 font-semibold animate-bounce">{statusMessage}</p>
             </div>
@@ -171,7 +169,6 @@ function App() {
                     activeClipIndex === idx ? 'bg-blue-900/40 border-blue-500 shadow-lg shadow-blue-500/20' : 'bg-gray-900 border-gray-700 hover:border-gray-500'
                   }`}
                 >
-                  {/* Virality Score Badge */}
                   <div className="absolute top-4 right-4 bg-gray-950 border border-gray-800 px-3 py-1 rounded-full flex items-center gap-2 shadow-inner">
                     <span className="text-xs text-gray-400">Score</span>
                     <span className={`text-sm font-black ${clip.viralityScore >= 90 ? 'text-emerald-400' : 'text-yellow-400'}`}>
@@ -179,7 +176,6 @@ function App() {
                     </span>
                   </div>
 
-                  {/* Clip Title and Reason */}
                   <h3 className="font-extrabold text-lg text-gray-100 mt-8 mb-2 leading-tight">
                     "{clip.title}"
                   </h3>
@@ -190,7 +186,6 @@ function App() {
               ))}
             </div>
             
-            {/* The Subtitle Editor Component */}
             < SubtitleEditor 
               clip={clips[activeClipIndex]} 
               onRender={handleRender} 
@@ -205,7 +200,6 @@ function App() {
              <h2 className="text-2xl font-bold text-gray-100 mb-2">Burning Subtitles & Cropping...</h2>
              <p className="text-gray-400 mb-8">Slicing your masterpiece in real-time.</p>
              
-             {/* THE LIVE PROGRESS BAR */}
              <div className="w-full max-w-md mx-auto bg-gray-800 rounded-full h-6 border border-gray-700 overflow-hidden relative">
                <div 
                  className="bg-gradient-to-r from-emerald-500 to-cyan-500 h-6 transition-all duration-300 ease-out flex items-center justify-end pr-2"
@@ -225,17 +219,14 @@ function App() {
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Left Column: The Video Player & Download Buttons */}
               <div className="flex flex-col items-center">
                 
-                {/* 🔴 FIXED VIDEO SRC: Just the raw finalVideoUrl */}
                <video 
                   src={`${API_URL}${finalVideoUrl}`} 
                   controls 
                   className="rounded-xl shadow-lg border border-gray-700 w-full max-w-sm aspect-[9/16] object-cover bg-black"
                 />
                 
-                {/* 🔴 FIXED DOWNLOAD LINK */}
                 <a 
                   href={`${API_URL}/api/download/${finalVideoUrl.split('/').pop()}`}
                   className="mt-6 w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-center transition shadow-[0_0_15px_rgba(37,99,235,0.4)] flex justify-center items-center gap-2"
@@ -244,7 +235,6 @@ function App() {
                   Download MP4
                 </a>
 
-                {/* 🔴 NEW: CLEAN UP & START OVER BUTTON */}
                 <button 
                   onClick={handleStartOver}
                   className="mt-4 w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl text-center transition border border-gray-700 flex justify-center items-center gap-2"
@@ -254,7 +244,6 @@ function App() {
 
               </div>
 
-              {/* Right Column: The AI Caption Box */}
               <div className="flex flex-col h-full">
                 <h3 className="text-xl font-bold text-gray-100 mb-3 flex items-center gap-2">
                   📝 Viral Caption
@@ -275,7 +264,7 @@ function App() {
                   </button>
                 </div>
                 <p className="text-gray-600 text-xs mt-4 text-center font-semibold tracking-wide uppercase">
-                  Caption generated by Llama 3.1 ⚡️
+                  Caption generated by Gemini ⚡️
                 </p>
               </div>
             </div>
