@@ -93,12 +93,14 @@ app.post('/api/generate', async (req, res) => {
 
     try {
         console.log(`[1/5] Downloading video natively with yt-dlp for: ${videoUrl}`);
-        io.emit('status-update', { message: '📥 Server is bypassing YouTube and downloading video directly...' });
+        io.emit('status-update', { message: '📥 Server is disguised as an Android phone and bypassing YouTube...' });
 
+        // yt-dlp-exec handles the bypass. We added the 'extractorArgs' to trick YouTube's bot detector!
         await ytdl(videoUrl, {
             output: inputPath,
             format: 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
             mergeOutputFormat: 'mp4',
+            extractorArgs: 'youtube:client=android', // 🥸 THE MAGIC BYPASS: Pretend to be an Android Phone
             noWarnings: true,
             preferFreeFormats: true
         });
