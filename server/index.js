@@ -118,19 +118,30 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-      console.log("[3/5] Transcribing with Whisper...");
+     console.log("[3/5] Transcribing with Whisper...");
 
-try {
-            // 1. Changed "groq" to "openai"
+        // 🛡️ 1. SAFETY CHECK: Did FFmpeg actually create audio?
+        const stats = fs.statSync(audioPath);
+        console.log(`🎵 Audio file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+        
+        if (stats.size === 0) {
+            throw new Error("Extracted audio is 0 bytes. Does this video actually have sound?");
+        }
+
+        try {
             const transcription = await openai.audio.transcriptions.create({
                 file: fs.createReadStream(audioPath),
                 model: "whisper-large-v3", 
-                // 2. CRITICAL: Must be verbose_json so we get the word-level timestamps!
                 response_format: "verbose_json", 
+            }, {
+                // 🛡️ 2. NETWORK FIX: Force Groq to wait, and retry if it drops
+                timeout: 60 * 1000, // Wait up to 60 seconds
+                maxRetries: 2       // If Groq hangs up, try again automatically
             });
             
             console.log("Transcription successful!");
-            // ... continue to step 4
+            
+            // ... continue to step 4 (Gemini AI Analysis)
         } catch (error) {
             console.error("Groq Error Details:", error.message);
             throw error;
