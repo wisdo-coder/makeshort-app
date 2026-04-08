@@ -91,25 +91,30 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/5] Asking Cobalt to bypass YouTube for: ${videoUrl}`);
+       console.log(`[1/5] Asking Cobalt to bypass YouTube for: ${videoUrl}`);
         io.emit('status-update', { message: '🔓 Server is bypassing YouTube security...' });
 
-        // The Server calls Cobalt! (No CORS here)
-        const cobaltRes = await axios.post("https://api.cobalt.tools/api/json", {
+        // The Server calls Cobalt with v11 formatting and a Chrome browser disguise!
+        const cobaltRes = await axios.post("https://api.cobalt.tools/", {
             url: videoUrl,
-            vQuality: "720",
+            videoQuality: "720", // Fixed: Cobalt v11 renamed this from vQuality
+            youtubeVideoCodec: "h264",
             disableMetadata: true
         }, {
             headers: {
                 "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", // The Disguise
+                "Origin": "https://cobalt.tools",
+                "Referer": "https://cobalt.tools/"
             }
         });
 
         if (!cobaltRes.data || !cobaltRes.data.url) {
+            console.error("Cobalt Response:", cobaltRes.data);
             throw new Error("Cobalt failed to get the video link.");
         }
-
+        
         console.log(`[2/5] Downloading clean video to server...`);
         io.emit('status-update', { message: '📥 Downloading clean video to the server...' });
 
