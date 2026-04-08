@@ -15,7 +15,6 @@ const OpenAI = require('openai');
 const fs = require('fs');
 const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
-const multer = require('multer'); // Brought in Multer for the Heist
 
 // 🧠 THE BRAIN: Gemini 2.5 Flash for finding viral highlights
 const ai = new GoogleGenAI({}); 
@@ -31,17 +30,6 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-
-// Configure Multer to save uploaded files from the Extension
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`);
-    }
-});
-const upload = multer({ storage: storage });
 
 // Helper to force ANY weird AI time format into pure seconds
 function parseAITime(timeVal) {
@@ -77,7 +65,6 @@ io.on('connection', (socket) => {
 // Route to delete all heavy video files
 app.post('/api/cleanup', (req, res) => {
   const foldersToClean = ['uploads', 'output'];
-  
   foldersToClean.forEach(folder => {
     const directory = path.join(__dirname, folder);
     fs.readdir(directory, (err, files) => {
@@ -89,29 +76,64 @@ app.post('/api/cleanup', (req, res) => {
       }
     });
   });
-  
   res.json({ message: "Trash emptied!" });
 });
 
 // ==========================================
-// ROUTE 1: UPLOAD & AI ANALYSIS (The New Way)
+// ROUTE 1: GENERATE (COBALT + AI Analysis)
 // ==========================================
-app.post('/api/upload', upload.single('video'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: "No video file uploaded." });
-    }
+app.post('/api/generate', async (req, res) => {
+    const { videoUrl } = req.body;
+    if (!videoUrl) return res.status(400).json({ error: "Missing YouTube URL" });
 
-    const inputPath = req.file.path;
-    const videoId = path.parse(req.file.filename).name;
+    const videoId = Date.now();
+    const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/3] Video received from extension! Extracting audio...`);
-        io.emit('status-update', { message: '🚀 Video received! Extracting audio...' });
+        console.log(`[1/5] Asking Cobalt to bypass YouTube for: ${videoUrl}`);
+        io.emit('status-update', { message: '🔓 Server is bypassing YouTube security...' });
+
+        // The Server calls Cobalt! (No CORS here)
+        const cobaltRes = await axios.post("https://api.cobalt.tools/api/json", {
+            url: videoUrl,
+            vQuality: "720",
+            disableMetadata: true
+        }, {
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+        });
+
+        if (!cobaltRes.data || !cobaltRes.data.url) {
+            throw new Error("Cobalt failed to get the video link.");
+        }
+
+        console.log(`[2/5] Downloading clean video to server...`);
+        io.emit('status-update', { message: '📥 Downloading clean video to the server...' });
+
+        // Download the file from Cobalt's direct link straight to the backend
+        const writer = fs.createWriteStream(inputPath);
+        const downloadRes = await axios({
+            url: cobaltRes.data.url,
+            method: 'GET',
+            responseType: 'stream'
+        });
+
+        downloadRes.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+        });
+
+        console.log(`[3/5] Extracting audio with FFmpeg...`);
+        io.emit('status-update', { message: '🚀 Video secured! Extracting audio...' });
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        console.log(`[2/3] Transcribing with Whisper...`);
+        console.log(`[4/5] Transcribing with Whisper...`);
         io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
         
         const transcription = await openai.audio.transcriptions.create({
@@ -121,7 +143,7 @@ app.post('/api/upload', upload.single('video'), async (req, res) => {
             timestamp_granularities: ["word"]
         });
 
-        console.log(`[3/3] AI Analysis with Gemini...`);
+        console.log(`[5/5] AI Analysis with Gemini...`);
         io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
         
         const highlights = await getHighlightsFromAI(transcription.text);
@@ -160,17 +182,7 @@ app.post('/api/render', async (req, res) => {
     const outputPath = path.join(outputDir, `${clip.id}-final.mp4`);
 
     try {
-        console.log("\n===================================");
-        console.log("🕵️‍♂️ SUBTITLE DEBUGGER:");
-        console.log("Clip ID:", clip.id);
-        console.log("Does clip have segments?:", !!clip.segments);
-        console.log("Number of words in clip:", clip.segments ? clip.segments.length : "MISSING FROM FRONTEND!");
-        
         const assContent = generateASS(clip.segments || [], clip.start);
-        
-        console.log("ASS File Preview (First 100 chars):\n", assContent.substring(0, 100) || "[EMPTY ASS FILE]");
-        console.log("===================================\n");
-
         fs.writeFileSync(subtitlePath, assContent);
         await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration);
         
@@ -192,10 +204,7 @@ app.get('/api/download/:filename', (req, res) => {
     const filePath = path.join(outputDir, filename); 
     
     res.download(filePath, `MakeShort-${filename}`, (err) => {
-        if (err) {
-            console.error("Download error:", err);
-            res.status(404).send("File not found");
-        }
+        if (err) res.status(404).send("File not found");
     });
 });
 
@@ -253,34 +262,22 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Default,Arial,80,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,3,5,40,40,640,1
 
 [Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-`;
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
 
     const chunkSize = 3; 
-
     for (let i = 0; i < words.length; i += chunkSize) {
         const chunk = words.slice(i, i + chunkSize);
-        
         for (let j = 0; j < chunk.length; j++) {
             const activeWord = chunk[j];
             const startSec = Math.max(0, (activeWord.start || 0) - clipStart);
-            
-            let endSec;
-            if (j < chunk.length - 1) {
-                endSec = Math.max(0, (chunk[j + 1].start || 0) - clipStart);
-            } else {
-                endSec = Math.max(0, (activeWord.end || 0) - clipStart);
-            }
-            
+            let endSec = (j < chunk.length - 1) ? Math.max(0, (chunk[j + 1].start || 0) - clipStart) : Math.max(0, (activeWord.end || 0) - clipStart);
             const startTime = formatASSTime(startSec);
             const endTime = formatASSTime(endSec);
-            
             let lineText = chunk.map((w, index) => {
                 const wordText = w.word.trim();
                 if (index === j) return `{\\c&H00FFFF&}${wordText}{\\c&HFFFFFF&}`;
                 return wordText;
             }).join(" ");
-            
             assContent += `Dialogue: 0,${startTime},${endTime},Default,,0,0,0,,${lineText}\n`;
         }
     }
@@ -300,12 +297,9 @@ function formatASSTime(seconds) {
 function runFFmpegRender(input, subtitleFile, output, start, duration) {
     return new Promise((resolve, reject) => {
         const outputFolder = path.dirname(output);
-        if (!fs.existsSync(outputFolder)) {
-            fs.mkdirSync(outputFolder, { recursive: true });
-        }
+        if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
 
         const relativeSubPath = path.relative(process.cwd(), subtitleFile).replace(/\\/g, '/');
-        console.log("FFmpeg reading subtitles from:", relativeSubPath);
         
         ffmpeg(input)
             .setStartTime(start)
@@ -317,18 +311,10 @@ function runFFmpegRender(input, subtitleFile, output, start, duration) {
             ])
             .outputOptions(['-c:v libx264', '-preset fast', '-crf 22', '-c:a copy'])
             .on('progress', (progress) => {
-                if (progress.percent) {
-                    io.emit('render-progress', { percent: Math.round(progress.percent) });
-                }
+                if (progress.percent) io.emit('render-progress', { percent: Math.round(progress.percent) });
             })
-            .on('end', () => {
-                console.log("✅ Render Complete!");
-                resolve();
-            })
-            .on('error', (err) => {
-                console.error("❌ FFmpeg Error:", err.message);
-                reject(err);
-            })
+            .on('end', () => resolve())
+            .on('error', (err) => reject(err))
             .save(output);
     });
 }
