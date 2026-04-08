@@ -1,3 +1,4 @@
+const ytdl = require('yt-dlp-exec');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -91,31 +92,19 @@ app.post('/api/generate', async (req, res) => {
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-       console.log(`[1/5] Asking Cobalt to bypass YouTube for: ${videoUrl}`);
-        io.emit('status-update', { message: '🔓 Server is bypassing YouTube security...' });
+        console.log(`[1/5] Downloading video natively with yt-dlp for: ${videoUrl}`);
+        io.emit('status-update', { message: '📥 Server is bypassing YouTube and downloading video directly...' });
 
-        // The Server calls Cobalt with v11 formatting and a Chrome browser disguise!
-        const cobaltRes = await axios.post("https://api.cobalt.tools/", {
-            url: videoUrl,
-            videoQuality: "720", // Fixed: Cobalt v11 renamed this from vQuality
-            youtubeVideoCodec: "h264",
-            disableMetadata: true
-        }, {
-            headers: {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", // The Disguise
-                "Origin": "https://cobalt.tools",
-                "Referer": "https://cobalt.tools/"
-            }
+        await ytdl(videoUrl, {
+            output: inputPath,
+            format: 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
+            mergeOutputFormat: 'mp4',
+            noWarnings: true,
+            preferFreeFormats: true
         });
 
-        if (!cobaltRes.data || !cobaltRes.data.url) {
-            console.error("Cobalt Response:", cobaltRes.data);
-            throw new Error("Cobalt failed to get the video link.");
-        }
-        
-        console.log(`[2/5] Downloading clean video to server...`);
+        console.log(`[2/5] Extracting audio with FFmpeg...`);
+        // ... the rest of your code (ffmpeg extraction, whisper transcription, etc.) remains exactly the same!
         io.emit('status-update', { message: '📥 Downloading clean video to the server...' });
 
         // Download the file from Cobalt's direct link straight to the backend
