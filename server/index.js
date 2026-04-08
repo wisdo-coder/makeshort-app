@@ -1,4 +1,3 @@
-const ytdl = require('yt-dlp-exec');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -14,8 +13,8 @@ const { exec } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
 const OpenAI = require('openai');
 const fs = require('fs');
-const axios = require('axios');
 const { GoogleGenAI } = require('@google/genai');
+const multer = require('multer'); // 📦 Added Multer for local uploads
 
 // 🧠 THE BRAIN: Gemini 2.5 Flash for finding viral highlights
 const ai = new GoogleGenAI({}); 
@@ -31,6 +30,19 @@ const uploadsDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
+// --- Configure Multer to save uploaded files directly to 'uploads' ---
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadsDir); 
+    },
+    filename: function (req, file, cb) {
+        const videoId = Date.now();
+        const ext = path.extname(file.originalname) || '.mp4';
+        cb(null, `${videoId}${ext}`);
+    }
+});
+const upload = multer({ storage: storage });
 
 // Helper to force ANY weird AI time format into pure seconds
 function parseAITime(timeVal) {
@@ -63,7 +75,9 @@ io.on('connection', (socket) => {
     console.log('Client connected for WebSocket updates');
 });
 
-// Route to delete all heavy video files
+// ==========================================
+// ROUTE 0: CLEANUP (Empty Trash)
+// ==========================================
 app.post('/api/cleanup', (req, res) => {
   const foldersToClean = ['uploads', 'output'];
   foldersToClean.forEach(folder => {
@@ -81,55 +95,30 @@ app.post('/api/cleanup', (req, res) => {
 });
 
 // ==========================================
-// ROUTE 1: GENERATE (COBALT + AI Analysis)
+// ROUTE 1: GENERATE (Local Upload + AI Analysis)
 // ==========================================
-app.post('/api/generate', async (req, res) => {
-    const { videoUrl } = req.body;
-    if (!videoUrl) return res.status(400).json({ error: "Missing YouTube URL" });
+app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
+    
+    // 1. Check if a file was actually uploaded
+    if (!req.file) {
+        return res.status(400).json({ error: "No video file was uploaded." });
+    }
 
-    const videoId = Date.now();
-    const inputPath = path.join(uploadsDir, `${videoId}.mp4`);
+    // 2. Set up our file paths (Multer already saved the video to inputPath)
+    const inputPath = req.file.path;
+    const videoId = path.parse(req.file.filename).name; 
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
-        console.log(`[1/5] Downloading video natively with yt-dlp for: ${videoUrl}`);
-        io.emit('status-update', { message: '📥 Server is disguised as an Android phone and bypassing YouTube...' });
-
-        // yt-dlp-exec handles the bypass. We added the 'extractorArgs' to trick YouTube's bot detector!
-        await ytdl(videoUrl, {
-            output: inputPath,
-            format: 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
-            mergeOutputFormat: 'mp4',
-            extractorArgs: 'youtube:client=android', // 🥸 THE MAGIC BYPASS: Pretend to be an Android Phone
-            noWarnings: true,
-            preferFreeFormats: true
-        });
+        console.log(`[1/5] Received local video upload: ${req.file.originalname}`);
+        io.emit('status-update', { message: '📥 Video securely uploaded! Starting processing...' });
 
         console.log(`[2/5] Extracting audio with FFmpeg...`);
-        // ... the rest of your code (ffmpeg extraction, whisper transcription, etc.) remains exactly the same!
-        io.emit('status-update', { message: '📥 Downloading clean video to the server...' });
-
-        // Download the file from Cobalt's direct link straight to the backend
-        const writer = fs.createWriteStream(inputPath);
-        const downloadRes = await axios({
-            url: cobaltRes.data.url,
-            method: 'GET',
-            responseType: 'stream'
-        });
-
-        downloadRes.data.pipe(writer);
-
-        await new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', reject);
-        });
-
-        console.log(`[3/5] Extracting audio with FFmpeg...`);
-        io.emit('status-update', { message: '🚀 Video secured! Extracting audio...' });
+        io.emit('status-update', { message: '🎵 Extracting audio track...' });
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        console.log(`[4/5] Transcribing with Whisper...`);
+        console.log(`[3/5] Transcribing with Whisper...`);
         io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
         
         const transcription = await openai.audio.transcriptions.create({
@@ -139,11 +128,12 @@ app.post('/api/generate', async (req, res) => {
             timestamp_granularities: ["word"]
         });
 
-        console.log(`[5/5] AI Analysis with Gemini...`);
+        console.log(`[4/5] AI Analysis with Gemini...`);
         io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
         
         const highlights = await getHighlightsFromAI(transcription.text);
 
+        console.log(`[5/5] Packaging draft clips...`);
         const draftClips = highlights.map((highlight, index) => {
             let safeStart = parseAITime(highlight.start);
             let safeDuration = parseAITime(highlight.duration) || 45;
