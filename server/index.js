@@ -118,15 +118,22 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        console.log(`[3/5] Transcribing with Whisper...`);
-        io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
-        
-        const transcription = await openai.audio.transcriptions.create({
-            file: fs.createReadStream(audioPath),
-            model: "whisper-large-v3",
-            response_format: "verbose_json",
-            timestamp_granularities: ["word"]
-        });
+      console.log("[3/5] Transcribing with Whisper...");
+
+try {
+    const transcription = await groq.audio.transcriptions.create({
+        // CRITICAL: You must use fs.createReadStream for Groq file uploads
+        file: fs.createReadStream(audioPath),
+        model: "whisper-large-v3", // or whisper-large-v3-turbo
+        response_format: "json", // or verbose_json if you need timestamps
+    });
+    
+    console.log("Transcription successful!");
+    // ... continue to step 4
+} catch (error) {
+    console.error("Groq Error Details:", error.message);
+    throw error;
+}
 
         console.log(`[4/5] AI Analysis with Gemini...`);
         io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
