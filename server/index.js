@@ -246,11 +246,19 @@ Return ONLY a valid JSON object with a 'highlights' array. Format: {"highlights"
 Transcript:
 ${text}`;
 
-    // 🛡️ THE FIX: Automatic Retry Loop
+    // 🧠 THE FIX: Model Fallback & Longer Wait Times
+    let currentModel = 'gemini-2.5-flash';
+
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
+            // If we've failed twice, Google is too busy. Switch to the ultra-reliable 1.5 model.
+            if (attempt === 3) {
+                console.log("🔄 2.5-Flash is too busy. Swapping to backup model (gemini-1.5-flash)...");
+                currentModel = 'gemini-1.5-flash';
+            }
+
             const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: currentModel,
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -258,20 +266,21 @@ ${text}`;
             });
 
             const parsed = JSON.parse(response.text);
+            console.log(`✅ Gemini successful on attempt ${attempt} using ${currentModel}!`);
             return parsed.highlights || parsed;
             
         } catch (error) {
             console.warn(`⚠️ Gemini Attempt ${attempt} failed:`, error.message);
             
-            // If we've run out of retries, crash gracefully
             if (attempt === retries) {
                 console.error("❌ Failed to parse Gemini output after multiple attempts.");
                 throw error;
             }
             
-            // Wait a few seconds before trying again (Exponential backoff: 2s, 4s, 6s)
-            console.log(`⏳ Waiting ${attempt * 2} seconds before trying again...`);
-            await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+            // Wait longer to let the servers breathe (5 seconds, then 10 seconds)
+            const waitTime = attempt * 5000; 
+            console.log(`⏳ Waiting ${waitTime / 1000} seconds before trying again...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
 }
