@@ -246,6 +246,45 @@ app.get('/api/download/:filename', (req, res) => {
 });
 
 // ==========================================
+// ROUTE 4: FULL VIDEO SUBTITLING (No AI Cuts)
+// ==========================================
+app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) => {
+    try {
+        const videoPath = req.file.path;
+        const audioPath = path.join(uploadsDir, `${req.file.filename}.mp3`);
+        const fileId = req.file.filename.split('.')[0];
+
+        // 1. Extract Audio
+        await extractAudio(videoPath, audioPath);
+
+        // 2. Get actual video duration
+        const duration = await getVideoDuration(videoPath);
+
+        // 3. Transcribe with Groq Whisper
+        const transcription = await transcribeAudio(audioPath);
+
+        // 4. Create a single "clip" that represents the entire video
+        const fullClip = {
+            id: fileId,
+            title: "Full Video (Auto-Subtitled)",
+            reason: "Complete raw video with burned-in subtitles.",
+            start: 0,
+            end: duration,
+            duration: duration,
+            segments: transcription.words, // Passes all words directly to the editor
+            sourcePath: videoPath,
+            socialCaption: "Check out this full video! 🚀 #AutoSubtitled"
+        };
+
+        // Return it as an array so the frontend map() still works
+        res.json({ clips: [fullClip] });
+    } catch (error) {
+        console.error("Transcription failed:", error);
+        res.status(500).json({ error: "Transcription failed" });
+    }
+});
+
+// ==========================================
 // HELPER FUNCTIONS
 // ==========================================
 function runCommand(cmd) {
