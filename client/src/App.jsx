@@ -16,6 +16,8 @@ function App() {
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   // 🟢 NEW: State for Aspect Ratio
   const [aspectRatio, setAspectRatio] = useState('9:16');
+  // 🟢 NEW: State for Processing Mode
+  const [processingMode, setProcessingMode] = useState('shorts'); // 'shorts' or 'full'
   const [renderProgress, setRenderProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
 
@@ -146,7 +148,7 @@ function App() {
             
             {/* The File Upload Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Upload Raw Video</label>
+              <label className="block text-sm font-medium text-gray-400 mb-2">1. Upload Raw Video</label>
               <input 
                 type="file"
                 accept="video/mp4,video/quicktime,video/*"
@@ -164,7 +166,7 @@ function App() {
 
             {/* The Aspect Ratio Toggle */}
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">Choose Format</label>
+              <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">2. Choose Format</label>
               <div className="flex gap-4">
                 <button 
                   onClick={() => setAspectRatio('9:16')}
@@ -189,20 +191,40 @@ function App() {
               </div>
             </div>
 
-            {/* 🟢 NEW: The Action Buttons (Replaces the old single generate button) */}
-            <div className="flex gap-4">
-              <button 
-                onClick={handleFullVideo}
-                className="flex-1 py-4 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-600/20"
-              >
-                Auto-Subtitle Full Video 🎬
-              </button>
+            {/* 🟢 NEW: The Processing Mode Toggle */}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">3. Choose Goal</label>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setProcessingMode('shorts')}
+                  className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                    processingMode === 'shorts' 
+                      ? 'bg-purple-600 border-purple-500 text-white shadow-[0_0_15px_rgba(147,51,234,0.3)]' 
+                      : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  ✂️ Find AI Hooks
+                </button>
+                <button 
+                  onClick={() => setProcessingMode('full')}
+                  className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                    processingMode === 'full' 
+                      ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]' 
+                      : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  🎬 Subtitle Full Video
+                </button>
+              </div>
+            </div>
 
+            {/* 🟢 NEW: The Master Action Button */}
+            <div className="pt-4">
               <button 
-                onClick={handleGenerate}
-                className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-600/20"
+                onClick={processingMode === 'shorts' ? handleGenerate : handleFullVideo}
+                className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-600/20"
               >
-                Find AI Hooks ✂️
+                {processingMode === 'shorts' ? 'Upload & Generate AI Shorts 🚀' : 'Upload & Auto-Subtitle Video 🎬'}
               </button>
             </div>
             
