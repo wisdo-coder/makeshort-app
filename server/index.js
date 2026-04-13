@@ -250,34 +250,60 @@ app.get('/api/download/:filename', (req, res) => {
 // ==========================================
 app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) => {
     try {
+        if (!req.file) return res.status(400).json({ error: "No video file was uploaded." });
+
         const videoPath = req.file.path;
-        const audioPath = path.join(uploadsDir, `${req.file.filename}.mp3`);
-        const fileId = req.file.filename.split('.')[0];
+        const fileId = path.parse(req.file.filename).name;
+        const audioPath = path.join(uploadsDir, `${fileId}.mp3`);
 
-        // 1. Extract Audio
-        await extractAudio(videoPath, audioPath);
+        // 1. Extract Audio using your existing runCommand helper
+        io.emit('status-update', { message: '🎵 Extracting audio track...' });
+        await runCommand(`ffmpeg -i "${videoPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        // 2. Get actual video duration
-        const duration = await getVideoDuration(videoPath);
+        // 2. Transcribe with Groq
+        io.emit('status-update', { message: '🗣️ AI is transcribing the full video...' });
+        const transcription = await groq.audio.transcriptions.create({
+            file: fs.createReadStream(audioPath),
+            model: "whisper-large-v3",
+            response_format: "verbose_json", 
+        });
 
-        // 3. Transcribe with Groq Whisper
-        const transcription = await transcribeAudio(audioPath);
+        // 3. Format words safely (copying your bulletproof logic from Route 1)
+        let wordsArray = [];
+        if (transcription.words) {
+            wordsArray = transcription.words;
+        } else if (transcription.segments) {
+            transcription.segments.forEach(seg => {
+                const words = seg.text.trim().split(/\s+/);
+                const duration = seg.end - seg.start;
+                const timePerWord = duration / Math.max(words.length, 1);
+                words.forEach((w, i) => {
+                    wordsArray.push({
+                        word: w,
+                        start: seg.start + (i * timePerWord),
+                        end: seg.start + ((i + 1) * timePerWord)
+                    });
+                });
+            });
+        }
 
-        // 4. Create a single "clip" that represents the entire video
+        // 4. Calculate total duration based on the last spoken word
+        const totalDuration = wordsArray.length > 0 ? wordsArray[wordsArray.length - 1].end : 60;
+
+        // 5. Create the single massive clip
         const fullClip = {
             id: fileId,
+            videoId: fileId, // Needed for your frontend map
             title: "Full Video (Auto-Subtitled)",
             reason: "Complete raw video with burned-in subtitles.",
             start: 0,
-            end: duration,
-            duration: duration,
-            segments: transcription.words, // Passes all words directly to the editor
+            duration: totalDuration,
+            segments: wordsArray, 
             sourcePath: videoPath,
             socialCaption: "Check out this full video! 🚀 #AutoSubtitled"
         };
 
-        // Return it as an array so the frontend map() still works
-        res.json({ clips: [fullClip] });
+        res.json({ success: true, clips: [fullClip] });
     } catch (error) {
         console.error("Transcription failed:", error);
         res.status(500).json({ error: "Transcription failed" });
