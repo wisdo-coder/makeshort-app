@@ -159,7 +159,29 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         
         const highlights = await getHighlightsFromAI(transcription.text);
 
-        console.log(`[5/5] Packaging draft clips...`);
+       console.log(`[5/5] Packaging draft clips...`);
+        
+        // 🛠️ THE FIX: Safely construct a words array even if Groq only gives us sentences
+        let wordsArray = [];
+        if (transcription.words) {
+            wordsArray = transcription.words;
+        } else if (transcription.segments) {
+            // Break down sentences into precise word-level timestamps dynamically
+            transcription.segments.forEach(seg => {
+                const words = seg.text.trim().split(/\s+/);
+                const duration = seg.end - seg.start;
+                const timePerWord = duration / Math.max(words.length, 1);
+                
+                words.forEach((w, i) => {
+                    wordsArray.push({
+                        word: w,
+                        start: seg.start + (i * timePerWord),
+                        end: seg.start + ((i + 1) * timePerWord)
+                    });
+                });
+            });
+        }
+
         const draftClips = highlights.map((highlight, index) => {
             let safeStart = parseAITime(highlight.start);
             let safeDuration = parseAITime(highlight.duration) || 45;
@@ -173,7 +195,8 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
                 viralityScore: highlight.viralityScore,
                 reason: highlight.reason,
                 socialCaption: highlight.socialCaption,
-                segments: transcription.words.filter(w => w.start >= safeStart && w.end <= (safeStart + safeDuration))
+                // 🟢 FIXED: Now we filter our bulletproof wordsArray!
+                segments: wordsArray.filter(w => w.start >= safeStart && w.end <= (safeStart + safeDuration))
             };
         });
 
