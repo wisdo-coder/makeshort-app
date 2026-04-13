@@ -246,15 +246,17 @@ Return ONLY a valid JSON object with a 'highlights' array. Format: {"highlights"
 Transcript:
 ${text}`;
 
-    // 🧠 THE FIX: Model Fallback & Longer Wait Times
+    // 🧠 THE FIX: Model Fallback using an active model
     let currentModel = 'gemini-2.5-flash';
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            // If we've failed twice, Google is too busy. Switch to the ultra-reliable 1.5 model.
+            // If we've failed twice, Google is too busy. Switch to the ultra-available Lite model.
             if (attempt === 3) {
-                console.log("🔄 2.5-Flash is too busy. Swapping to backup model (gemini-1.5-flash)...");
-                currentModel = 'gemini-1.5-flash';
+                console.log("🔄 2.5-Flash is too busy. Swapping to backup model (gemini-2.5-flash-lite)...");
+                
+                // 🟢 FIXED: Changed from 1.5-flash to 2.5-flash-lite
+                currentModel = 'gemini-2.5-flash-lite'; 
             }
 
             const response = await ai.models.generateContent({
@@ -277,7 +279,6 @@ ${text}`;
                 throw error;
             }
             
-            // Wait longer to let the servers breathe (5 seconds, then 10 seconds)
             const waitTime = attempt * 5000; 
             console.log(`⏳ Waiting ${waitTime / 1000} seconds before trying again...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
