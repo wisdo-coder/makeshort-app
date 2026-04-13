@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';  
 import axios from 'axios';
 import SubtitleEditor from './components/SubtitleEditor';
-// Note: Remove ProgressBar import if you aren't actually using it in the JSX
 import ProgressBar from './components/ProgressBar'; 
 import gsap from 'gsap';
 
+// 🟢 STRICTLY pointing to your live Render backend
 const API_URL = 'https://makeshort-backend.onrender.com';
 
 function App() {
@@ -19,8 +19,19 @@ function App() {
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
 
   useEffect(() => {
+    // 🟢 Upgraded Socket Connection
     const socket = io(API_URL, {
-        transports: ['websocket', 'polling']
+        transports: ['websocket', 'polling'],
+        autoConnect: true,
+        reconnectionAttempts: 5 // Tries to reconnect if it drops
+    });
+    
+    socket.on('connect', () => {
+        console.log('✅ Connected to Render WebSocket server!');
+    });
+
+    socket.on('connect_error', (err) => {
+        console.error('❌ WebSocket Connection Error:', err.message);
     });
     
     socket.on('render-progress', (data) => {
