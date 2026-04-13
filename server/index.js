@@ -260,14 +260,36 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
         io.emit('status-update', { message: '🎵 Extracting audio track...' });
         await runCommand(`ffmpeg -i "${videoPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        // 2. Transcribe with Groq
+       // 2. Transcribe with Groq (Now with 3x Retry Logic!)
         io.emit('status-update', { message: '🗣️ AI is transcribing the full video...' });
-        const transcription = await groq.audio.transcriptions.create({
-            file: fs.createReadStream(audioPath),
-            model: "whisper-large-v3",
-            response_format: "verbose_json", 
-        });
-
+        
+        let transcription = null;
+        let groqRetries = 3;
+        
+        for (let attempt = 1; attempt <= groqRetries; attempt++) {
+            try {
+                transcription = await groq.audio.transcriptions.create({
+                    file: fs.createReadStream(audioPath),
+                    model: "whisper-large-v3",
+                    response_format: "verbose_json", 
+                });
+                console.log(`✅ Transcription successful on attempt ${attempt}!`);
+                break; // It worked! Break out of the retry loop
+                
+            } catch (error) {
+                console.warn(`⚠️ Groq Attempt ${attempt} failed:`, error.message);
+                
+                if (attempt === groqRetries) {
+                    console.error("❌ Groq completely failed after multiple attempts.");
+                    throw new Error(`Groq API Error: ${error.message}`);
+                }
+                
+                // Wait 3 seconds before trying again
+                console.log(`⏳ Groq server hiccup. Waiting 3 seconds before trying again...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+        }
+        
         // 3. Format words safely (copying your bulletproof logic from Route 1)
         let wordsArray = [];
         if (transcription.words) {
