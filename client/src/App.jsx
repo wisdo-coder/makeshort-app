@@ -64,6 +64,26 @@ function App() {
     }
   };
 
+  const handleFullVideo = async () => {
+    if (!videoFile) return alert("Please select a video file first!");
+    
+    setStep('processing');
+    setStatusMessage('Transcribing full video (Skipping AI Cuts)...');
+    try {
+      const formData = new FormData();
+      formData.append('videoFile', videoFile); 
+
+      // 🟢 Calls our new route!
+      const { data } = await axios.post(`${API_URL}/api/transcribe-only`, formData);
+      setClips(data.clips);
+      setStep('editing'); 
+    } catch (err) {
+      console.error(err);
+      alert("Error transcribing video. Check console.");
+      setStep('idle');
+    }
+  };
+
   const handleRender = async (editedClip) => {
     setStep('rendering');
     try {
@@ -142,7 +162,7 @@ function App() {
               />
             </div>
 
-            {/* 🟢 NEW: The Aspect Ratio Toggle goes right here! */}
+            {/* The Aspect Ratio Toggle */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">Choose Format</label>
               <div className="flex gap-4">
@@ -169,13 +189,23 @@ function App() {
               </div>
             </div>
 
-            {/* The Generate Button */}
-            <button 
-              onClick={handleGenerate}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-600/20"
-            >
-              Upload & Generate AI Shorts 🚀
-            </button>
+            {/* 🟢 NEW: The Action Buttons (Replaces the old single generate button) */}
+            <div className="flex gap-4">
+              <button 
+                onClick={handleFullVideo}
+                className="flex-1 py-4 bg-purple-600 hover:bg-purple-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-600/20"
+              >
+                Auto-Subtitle Full Video 🎬
+              </button>
+
+              <button 
+                onClick={handleGenerate}
+                className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-600/20"
+              >
+                Find AI Hooks ✂️
+              </button>
+            </div>
+            
           </div>
         )}
 
