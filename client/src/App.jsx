@@ -14,7 +14,8 @@ function App() {
   const [clips, setClips] = useState([]);
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
-  
+  // 🟢 NEW: State for Aspect Ratio
+  const [aspectRatio, setAspectRatio] = useState('9:16');
   const [renderProgress, setRenderProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
 
@@ -66,7 +67,11 @@ function App() {
   const handleRender = async (editedClip) => {
     setStep('rendering');
     try {
-      const { data } = await axios.post(`${API_URL}/api/render`, { clip: editedClip });
+      // 🟢 NEW: We now send the aspectRatio along with the clip!
+      const { data } = await axios.post(`${API_URL}/api/render`, { 
+        clip: editedClip, 
+        aspectRatio: aspectRatio 
+      });
       setFinalVideoUrl(data.url);
       setStep('results');
     } catch (err) {
@@ -118,6 +123,8 @@ function App() {
         {/* State 1: Idle Input */}
         {step === 'idle' && (
           <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl">
+            
+            {/* The File Upload Input */}
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">Upload Raw Video</label>
               <input 
@@ -134,6 +141,35 @@ function App() {
                   bg-gray-950 border border-gray-700 rounded-xl p-2 cursor-pointer focus:outline-none focus:border-blue-500 transition"
               />
             </div>
+
+            {/* 🟢 NEW: The Aspect Ratio Toggle goes right here! */}
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">Choose Format</label>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setAspectRatio('9:16')}
+                  className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                    aspectRatio === '9:16' 
+                      ? 'bg-emerald-600 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
+                      : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  📱 9:16 (Shorts)
+                </button>
+                <button 
+                  onClick={() => setAspectRatio('16:9')}
+                  className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                    aspectRatio === '16:9' 
+                      ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' 
+                      : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  💻 16:9 (YouTube)
+                </button>
+              </div>
+            </div>
+
+            {/* The Generate Button */}
             <button 
               onClick={handleGenerate}
               className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-blue-600/20"
@@ -223,7 +259,10 @@ function App() {
                <video 
                   src={`${API_URL}${finalVideoUrl}`} 
                   controls 
-                  className="rounded-xl shadow-lg border border-gray-700 w-full max-w-sm aspect-[9/16] object-cover bg-black"
+                  // 🟢 NEW: Changes the video player shape dynamically!
+                  className={`rounded-xl shadow-lg border border-gray-700 w-full bg-black object-cover ${
+                    aspectRatio === '9:16' ? 'max-w-sm aspect-[9/16]' : 'max-w-2xl aspect-video'
+                  }`}
                 />
                 
                 <a 
