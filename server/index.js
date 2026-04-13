@@ -115,7 +115,7 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-     console.log(`[3/5] Transcribing with Whisper...`);
+    console.log(`[3/5] Transcribing with Whisper...`);
         io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
         
         const stats = fs.statSync(audioPath);
@@ -125,12 +125,34 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
             throw new Error("Extracted audio is 0 bytes. Video might not have sound.");
         }
 
-        // 🟢 FIXED: Using the official Groq SDK without the unsupported parameters
-        const transcription = await groq.audio.transcriptions.create({
-            file: fs.createReadStream(audioPath),
-            model: "whisper-large-v3",
-            response_format: "verbose_json", 
-        });
+        // 🛡️ THE FIX: Automatic Retry Loop for Groq
+        let transcription = null;
+        let groqRetries = 3;
+        
+        for (let attempt = 1; attempt <= groqRetries; attempt++) {
+            try {
+                transcription = await groq.audio.transcriptions.create({
+                    file: fs.createReadStream(audioPath),
+                    model: "whisper-large-v3",
+                    response_format: "verbose_json", 
+                });
+                
+                console.log(`✅ Transcription successful on attempt ${attempt}!`);
+                break; // It worked! Break out of the retry loop
+                
+            } catch (error) {
+                console.warn(`⚠️ Groq Attempt ${attempt} failed:`, error.message);
+                
+                if (attempt === groqRetries) {
+                    console.error("❌ Groq completely failed after multiple attempts.");
+                    throw new Error(`Groq API Error: ${error.message}`);
+                }
+                
+                // Wait 3 seconds before trying again
+                console.log(`⏳ Groq server hiccup. Waiting 3 seconds before trying again...`);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+        }
 
         console.log(`[4/5] AI Analysis with Gemini...`);
         io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
