@@ -212,14 +212,16 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
 // ROUTE 2: RENDERING (FFmpeg & Subtitles)
 // ==========================================
 app.post('/api/render', async (req, res) => {
-    const { clip } = req.body;
+    // 🟢 NEW: Pull aspectRatio from req.body
+    const { clip, aspectRatio } = req.body; 
     const subtitlePath = path.join(uploadsDir, `${clip.id}.ass`);
     const outputPath = path.join(outputDir, `${clip.id}-final.mp4`);
 
     try {
-        const assContent = generateASS(clip.segments || [], clip.start);
+        // 🟢 NEW: Pass aspectRatio to both functions
+        const assContent = generateASS(clip.segments || [], clip.start, aspectRatio);
         fs.writeFileSync(subtitlePath, assContent);
-        await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration);
+        await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration, aspectRatio);
         
         res.json({ 
             success: true, 
@@ -309,11 +311,16 @@ ${text}`;
     }
 }
 
-function generateASS(words, clipStart = 0) {
+// 🟢 NEW: Receives aspectRatio to set the subtitle canvas size
+function generateASS(words, clipStart = 0, aspectRatio = '9:16') {
+    const isLandscape = aspectRatio === '16:9';
+    const resX = isLandscape ? 1280 : 720;
+    const resY = isLandscape ? 720 : 1280;
+
     let assContent = `[Script Info]
 ScriptType: v4.00+
-PlayResX: 720
-PlayResY: 1280
+PlayResX: ${resX}
+PlayResY: ${resY}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
@@ -352,21 +359,28 @@ function formatASSTime(seconds) {
     return `${hh}:${mm}:${ss}.${cs}`;
 }
 
-function runFFmpegRender(input, subtitleFile, output, start, duration) {
+// 🟢 NEW: Receives aspectRatio to decide if it should crop or not!
+function runFFmpegRender(input, subtitleFile, output, start, duration, aspectRatio = '9:16') {
     return new Promise((resolve, reject) => {
         const outputFolder = path.dirname(output);
         if (!fs.existsSync(outputFolder)) fs.mkdirSync(outputFolder, { recursive: true });
 
         const relativeSubPath = path.relative(process.cwd(), subtitleFile).replace(/\\/g, '/');
         
+        // Decide what filters to apply based on the format
+        const filters = [];
+        if (aspectRatio === '9:16') {
+            filters.push('crop=ih*(9/16):ih'); // Cut the sides off
+            filters.push('scale=720:1280');    // Scale to standard shorts size
+        } else {
+            filters.push('scale=1280:720');    // Just scale to standard 720p HD landscape
+        }
+        filters.push(`subtitles='${relativeSubPath}'`); // Burn the subtitles
+
         ffmpeg(input)
             .setStartTime(start)
             .setDuration(duration)
-            .videoFilters([
-                'crop=ih*(9/16):ih', 
-                'scale=720:1280',    
-                `subtitles='${relativeSubPath}'` 
-            ])
+            .videoFilters(filters)
             .outputOptions(['-c:v libx264', '-preset fast', '-crf 22', '-c:a copy'])
             .on('progress', (progress) => {
                 if (progress.percent) io.emit('render-progress', { percent: Math.round(progress.percent) });
