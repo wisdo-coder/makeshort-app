@@ -210,7 +210,7 @@ function runCommand(cmd) {
     });
 }
 
-async function getHighlightsFromAI(text) {
+async function getHighlightsFromAI(text, retries = 3) {
     const prompt = `You are an elite TikTok/YouTube Shorts algorithm strategist. Analyze this video transcript and extract the 3 most viral, highly engaging segments.
 
 STRICT RULES:
@@ -224,20 +224,33 @@ Return ONLY a valid JSON object with a 'highlights' array. Format: {"highlights"
 Transcript:
 ${text}`;
 
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-            }
-        });
+    // 🛡️ THE FIX: Automatic Retry Loop
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                }
+            });
 
-        const parsed = JSON.parse(response.text);
-        return parsed.highlights || parsed;
-    } catch (error) {
-        console.error("Failed to parse Gemini output:", error);
-        throw error;
+            const parsed = JSON.parse(response.text);
+            return parsed.highlights || parsed;
+            
+        } catch (error) {
+            console.warn(`⚠️ Gemini Attempt ${attempt} failed:`, error.message);
+            
+            // If we've run out of retries, crash gracefully
+            if (attempt === retries) {
+                console.error("❌ Failed to parse Gemini output after multiple attempts.");
+                throw error;
+            }
+            
+            // Wait a few seconds before trying again (Exponential backoff: 2s, 4s, 6s)
+            console.log(`⏳ Waiting ${attempt * 2} seconds before trying again...`);
+            await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+        }
     }
 }
 
