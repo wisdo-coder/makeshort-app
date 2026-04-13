@@ -11,7 +11,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { exec } = require('child_process');
 const ffmpeg = require('fluent-ffmpeg');
-const OpenAI = require('openai');
+const Groq = require('groq-sdk');
 const fs = require('fs');
 const { GoogleGenAI } = require('@google/genai');
 const multer = require('multer'); // 📦 Added Multer for local uploads
@@ -20,10 +20,7 @@ const multer = require('multer'); // 📦 Added Multer for local uploads
 const ai = new GoogleGenAI({}); 
 
 // 👂 THE EARS: Groq Whisper strictly for word-level timestamps 
-const openai = new OpenAI({
-    apiKey: process.env.GROQ_API_KEY, 
-    baseURL: "https://api.groq.com/openai/v1",
-});
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // --- Auto-create required folders so FFmpeg doesn't crash ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -118,34 +115,22 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-     console.log("[3/5] Transcribing with Whisper...");
-
-        // 🛡️ 1. SAFETY CHECK: Did FFmpeg actually create audio?
+     console.log(`[3/5] Transcribing with Whisper...`);
+        io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
+        
         const stats = fs.statSync(audioPath);
         console.log(`🎵 Audio file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-        
+
         if (stats.size === 0) {
-            throw new Error("Extracted audio is 0 bytes. Does this video actually have sound?");
+            throw new Error("Extracted audio is 0 bytes. Video might not have sound.");
         }
 
-        try {
-            const transcription = await openai.audio.transcriptions.create({
-                file: fs.createReadStream(audioPath),
-                model: "whisper-large-v3", 
-                response_format: "verbose_json", 
-            }, {
-                // 🛡️ 2. NETWORK FIX: Force Groq to wait, and retry if it drops
-                timeout: 60 * 1000, // Wait up to 60 seconds
-                maxRetries: 2       // If Groq hangs up, try again automatically
-            });
-            
-            console.log("Transcription successful!");
-            
-            // ... continue to step 4 (Gemini AI Analysis)
-        } catch (error) {
-            console.error("Groq Error Details:", error.message);
-            throw error;
-        }
+        // 🟢 FIXED: Using the official Groq SDK without the unsupported parameters
+        const transcription = await groq.audio.transcriptions.create({
+            file: fs.createReadStream(audioPath),
+            model: "whisper-large-v3",
+            response_format: "verbose_json", 
+        });
 
         console.log(`[4/5] AI Analysis with Gemini...`);
         io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
