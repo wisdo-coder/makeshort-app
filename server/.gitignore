@@ -3,5 +3,10 @@ node_modules
 server/uploads/
 server/output/
 .DS_Store
+
+# Ignore all generated video and audio files
 *.mp4
 *.mp3
+
+# BUT make an exception for the background assets!
+!assets/*.mp4

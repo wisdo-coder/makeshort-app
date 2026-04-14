@@ -1,8 +1,8 @@
-ffmpeg.setFfmpegPath(require('ffmpeg-static'));
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
+ffmpeg.setFfmpegPath(require('ffmpeg-static'));
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 const cloudinary = require('cloudinary').v2;
 // 🗄️ THE DATABASE: Initialize Supabase
