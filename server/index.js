@@ -17,6 +17,7 @@ cloudinary.config({
 console.log("TESTING API KEYS:");
 console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
 console.log("Gemini Key Found:", !!process.env.GEMINI_API_KEY);
+console.log("ElevenLabs Key Found:", !!process.env.ELEVENLABS_API_KEY); // 👈 ADD THIS
 
 const express = require('express');
 const http = require('http');
@@ -348,11 +349,12 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
 // 🟢 NEW: The Magic Reddit Scraper Route
 app.post('/api/generate-reddit', async (req, res) => {
   try {
-    // 🟢 NEW: We are now accepting userId from the frontend!
     const { redditUrl, userId } = req.body; 
     if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
 
     console.log(`🕵️‍♂️ 1. Scraping Reddit: ${redditUrl}`);
+    io.emit('status-update', { message: '🕵️‍♂️ Reading Reddit story...' }); // 👈 ADDED WEBSOCKET
+
     let cleanUrl = redditUrl.split('?')[0]; 
     if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
     
@@ -367,21 +369,30 @@ app.post('/api/generate-reddit', async (req, res) => {
     const fullScript = `${postData.title}... ${story}`.substring(0, 1000); 
 
     console.log(`🎙️ 2. Generating ElevenLabs AI Voice...`);
-    const elevenLabsResponse = await axios({
-      method: 'post',
-      url: `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
-      headers: {
-        'Accept': 'audio/mpeg',
-        'xi-api-key': process.env.ELEVENLABS_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        text: fullScript,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: { stability: 0.5, similarity_boost: 0.5 }
-      },
-      responseType: 'arraybuffer'
-    });
+    io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); // 👈 ADDED WEBSOCKET
+
+    let elevenLabsResponse;
+    try {
+        elevenLabsResponse = await axios({
+          method: 'post',
+          url: `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+          headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': process.env.ELEVENLABS_API_KEY 
+          },
+          data: {
+            text: fullScript,
+            model_id: 'eleven_monolingual_v1',
+            voice_settings: { stability: 0.5, similarity_boost: 0.5 }
+          },
+          responseType: 'arraybuffer'
+        });
+    } catch (elevenError) {
+        // 🚨 THIS WILL CATCH THE 401 ERROR SPECIFICALLY
+        console.error("ElevenLabs Error:", elevenError.response ? elevenError.response.status : elevenError.message);
+        throw new Error(`ElevenLabs API failed. Check your API key and character credits!`);
+    }
 
     const outputDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
@@ -391,6 +402,8 @@ app.post('/api/generate-reddit', async (req, res) => {
     fs.writeFileSync(audioPath, elevenLabsResponse.data);
 
     console.log(`🧠 3. Analyzing audio with Deepgram...`);
+    io.emit('status-update', { message: '🧠 Transcribing voice audio...' }); // 👈 ADDED WEBSOCKET
+    
     const audioBuffer = fs.readFileSync(audioPath);
     const deepgramResponse = await axios({
       method: 'post',
@@ -405,7 +418,8 @@ app.post('/api/generate-reddit', async (req, res) => {
     const wordsArray = deepgramResponse.data.results.channels[0].alternatives[0].words;
 
     console.log(`✍️ 4. Generating Subtitle File...`);
-    // Chunk the words (3 words per screen)
+    io.emit('status-update', { message: '✍️ Writing subtitles...' }); // 👈 ADDED WEBSOCKET
+
     let chunks = [];
     for (let i = 0; i < wordsArray.length; i += 3) {
         const chunk = wordsArray.slice(i, i + 3);
@@ -416,7 +430,6 @@ app.post('/api/generate-reddit', async (req, res) => {
         });
     }
 
-    // Create the .ass file structure
     let assContent = `[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -437,67 +450,51 @@ Format: Layer, Start, End, Style, Text\n`;
     fs.writeFileSync(assPath, assContent);
 
     console.log(`🎬 5. Final Video Stitching...`);
+    io.emit('status-update', { message: '🎬 Rendering final video...' }); // 👈 ADDED WEBSOCKET
+
     const backgrounds = ['background1.mp4', 'background2.mp4'];
     const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
     const backgroundVideoPath = path.join(__dirname, 'assets', randomBg);
     const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
 
-    // FFmpeg needs the subtitle path formatting to be slightly tweaked for Windows users running locally
     const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
 
     ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
-      // Crop to 9:16 AND burn the subtitles into the video!
       .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
       .outputOptions(['-c:v libx264', '-c:a aac', '-shortest'])
       .save(finalOutputPath)
     .on('end', async () => {
         console.log(`🚀 Video stitched locally: ${finalOutputPath}`);
-        console.log(`☁️ Uploading to Cloudinary (this might take a few seconds)...`);
+        io.emit('status-update', { message: '☁️ Uploading to cloud...' }); // 👈 ADDED WEBSOCKET
 
         try {
-          // 1. Upload to Cloudinary
           const uploadResult = await cloudinary.uploader.upload(finalOutputPath, {
             resource_type: "video",
             folder: "makeshort_viral" 
           });
 
-          console.log(`✅ Cloudinary Upload Success! URL: ${uploadResult.secure_url}`);
-
-          // 🟢 NEW 2. Save to Supabase (If the user is logged in)
           if (userId) {
-            console.log(`🗄️ Saving video to Supabase for user: ${userId}...`);
             const { error: dbError } = await supabase
               .from('videos')
-              .insert([
-                {
+              .insert([{
                   user_id: userId,
                   video_url: uploadResult.secure_url,
-                  title: postData.title.substring(0, 50) + "...", // Save a short version of the Reddit title
+                  title: postData.title.substring(0, 50) + "...", 
                   type: 'reddit'
-                }
-              ]);
-
-            if (dbError) {
-              console.error('❌ Supabase Error:', dbError);
-            } else {
-              console.log('✅ Successfully saved to Database!');
-            }
+              }]);
           }
 
-          // 3. Send the response back to the frontend
           res.json({ 
             success: true, 
             message: 'Video complete!', 
             videoUrl: uploadResult.secure_url 
           });
 
-          // 4. Cleanup local files
           if (fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
           if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
           if (fs.existsSync(assPath)) fs.unlinkSync(assPath);
-          console.log(`🧹 Cleaned up local temp files.`);
 
         } catch (uploadError) {
           console.error('❌ Cloudinary/DB Error:', uploadError);
@@ -507,7 +504,7 @@ Format: Layer, Start, End, Style, Text\n`;
 
   } catch (error) {
     console.error('❌ Error Pipeline:', error.message);
-    res.status(500).json({ error: 'Generation failed.' });
+    res.status(500).json({ error: error.message }); // 👈 Passes exact error to frontend
   }
 });
 
