@@ -49,17 +49,18 @@ function App() {
         setClips(data.clips);
         setStep('editing'); 
 
-     } else if (inputType === 'reddit') {
+    } else if (inputType === 'reddit') {
         if (!redditUrl) return alert("Please paste a Reddit link!");
         
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
-        // 🟢 NEW: Send the userId to the backend!
+        // Send the userId to the backend!
         const { data } = await axios.post(`${API_URL}/api/generate-reddit`, {
           redditUrl: redditUrl,
           userId: userId 
         });
 
+        // 🟢 Show the video and STOP! No more code after this.
         setFinalVideoUrl(data.videoUrl);
         setStep('done');
         
@@ -78,6 +79,23 @@ function App() {
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || "Error processing. Check console.");
+      setStep('idle');
+    }
+  };
+
+  const handleFullVideo = async () => {
+    setStep('processing');
+    try {
+      if (!videoFile) return alert("Please select a video file!");
+      const formData = new FormData();
+      formData.append('videoFile', videoFile);
+      setStatusMessage('Transcribing full video... 🗣️');
+      const { data } = await axios.post(`${API_URL}/api/transcribe-only`, formData);
+      setClips(data.clips);
+      setStep('editing');
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.error || "Error processing full video.");
       setStep('idle');
     }
   };
