@@ -369,44 +369,39 @@ app.post('/api/generate-reddit', async (req, res) => {
 
     const fullScript = `${postData.title}... ${story}`.substring(0, 1000); 
 
-    console.log(`🎙️ 2. Generating ElevenLabs AI Voice...`);
-    io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); // 👈 ADDED WEBSOCKET
+    console.log(`🎙️ 2. Generating Deepgram AI Voice (Goodbye ElevenLabs!)...`);
+    io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); 
 
-    // Add this right before the try/catch block for ElevenLabs
-console.log("🔑 KEY CHECK:", process.env.ELEVENLABS_API_KEY ? `Starts with: ${process.env.ELEVENLABS_API_KEY.substring(0, 5)}... Total Length: ${process.env.ELEVENLABS_API_KEY.length}` : "🚨 KEY IS UNDEFINED!");
-
-    let elevenLabsResponse;
+    let voiceResponse;
     try {
-        elevenLabsResponse = await axios({
-          method: 'post',
-          url: `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
-         headers: {
-  'Accept': 'audio/mpeg',
-  'Content-Type': 'application/json',
-  'xi-api-key': process.env.ELEVENLABS_API_KEY // 👈 THIS IS CRITICAL
-},
+      voiceResponse = await axios({
+        method: 'post',
+        // 'aura-orion-en' is a great male voice. Want female? Use 'aura-asteria-en'
+        url: 'https://api.deepgram.com/v1/speak?model=aura-orion-en',
+        headers: {
+          'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`, 
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        },
         data: {
-    text: fullScript,
-    model_id: "eleven_turbo_v2_5", // 👈 Change this line
-    voice_settings: {
-      stability: 0.5,
-      similarity_boost: 0.5
-    }
-  },
-          responseType: 'arraybuffer'
-        });
-    } catch (elevenError) {
-        // 🚨 THIS WILL CATCH THE 401 ERROR SPECIFICALLY
-        console.error("ElevenLabs Error:", elevenError.response ? elevenError.response.status : elevenError.message);
-        throw new Error(`ElevenLabs API failed. Check your API key and character credits!`);
+          text: fullScript
+        },
+        responseType: 'arraybuffer'
+      });
+    } catch (error) {
+       console.error("❌ Deepgram TTS Error:", error.response ? error.response.data : error.message);
+       throw new Error(`Deepgram Audio API failed!`);
     }
 
+    // Save the audio buffer directly to a file
     const outputDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
     
     const timestamp = Date.now();
     const audioPath = path.join(outputDir, `voice_${timestamp}.mp3`);
-    fs.writeFileSync(audioPath, elevenLabsResponse.data);
+    
+    fs.writeFileSync(audioPath, Buffer.from(voiceResponse.data));
+    console.log(`✅ Audio saved successfully to: ${audioPath}`);
 
     console.log(`🧠 3. Analyzing audio with Deepgram...`);
     io.emit('status-update', { message: '🧠 Transcribing voice audio...' }); // 👈 ADDED WEBSOCKET
