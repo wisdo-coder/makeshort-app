@@ -464,7 +464,13 @@ ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
       .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
-      .outputOptions(['-c:v libx264', '-c:a aac', '-shortest'])
+      .outputOptions([
+          '-c:v libx264', 
+          '-preset ultrafast', // 👈 Forces FFmpeg to render 5x-10x faster
+          '-crf 28',           // 👈 Lowers file size/RAM usage slightly
+          '-c:a aac', 
+          '-shortest'
+      ])
       .save(finalOutputPath)
       .on('error', (err) => { // 👈 ADD THIS BLOCK
           console.error(`❌ FFmpeg Error:`, err.message);
