@@ -46,21 +46,37 @@ function App() {
         formData.append('videoFile', videoFile); 
         const { data } = await axios.post(`${API_URL}/api/generate`, formData);
         setClips(data.clips);
-      } else if (inputType === 'reddit') {
+        setStep('editing'); 
+
+     } else if (inputType === 'reddit') {
         if (!redditUrl) return alert("Please paste a Reddit link!");
-        setStatusMessage('Scraping Reddit story...');
-        // Placeholder for our next backend route!
-        setTimeout(() => setStep('editing'), 2000); 
+        
+        // Let the user know the magic is happening
+        setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
+        
+        const { data } = await axios.post(`${API_URL}/api/generate-reddit`, {
+          redditUrl: redditUrl
+        });
+
+        // Save the URL and switch to the final download screen
+        setFinalVideoUrl(data.videoUrl);
+        setStep('done');
+        
+        console.log("✅ SCRAPED SCRIPT:", data.script);
+        alert(`Successfully scraped: ${data.title}\n(Check your console to read the whole story!)`);
+        
+        // We will move to the next step once we add the Voice AI!
+        setStep('idle'); 
+
       } else {
         if (!scriptText) return alert("Please write a script!");
-        setStatusMessage('Analyzing script...');
-        // Placeholder for our next backend route!
+        setStatusMessage('Analyzing script... 🧠');
+        // Placeholder for Text Script logic
         setTimeout(() => setStep('editing'), 2000);
       }
-      setStep('editing'); 
     } catch (err) {
       console.error(err);
-      alert("Error processing. Check console.");
+      alert(err.response?.data?.error || "Error processing. Check console.");
       setStep('idle');
     }
   };
@@ -129,10 +145,11 @@ function App() {
             <p className="text-gray-400 mt-2">What are we turning viral today?</p>
           </header>
 
+          {/* State 1: Idle Input */}
           {step === 'idle' && (
             <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl">
               
-              {/* 🟢 NEW: Input Type Tabs */}
+              {/* Input Type Tabs */}
               <div className="flex p-1 bg-gray-950 rounded-xl mb-6 border border-gray-800">
                 <button 
                   onClick={() => setInputType('reddit')}
@@ -195,16 +212,115 @@ function App() {
                 )}
               </div>
 
+              {/* 🟢 RESTORED: Format Options (Shows for all inputs) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2 mt-2">Choose Format</label>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setAspectRatio('9:16')}
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                      aspectRatio === '9:16' 
+                        ? 'bg-emerald-600 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
+                        : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    📱 9:16 (Shorts)
+                  </button>
+                  <button 
+                    onClick={() => setAspectRatio('16:9')}
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                      aspectRatio === '16:9' 
+                        ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' 
+                        : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    💻 16:9 (YouTube)
+                  </button>
+                </div>
+              </div>
+
+              {/* 🟢 RESTORED: Goal Options (Only shows for Video uploads) */}
+              {inputType === 'video' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">Choose Goal</label>
+                  <div className="flex gap-4">
+                    <button 
+                      onClick={() => setProcessingMode('shorts')}
+                      className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                        processingMode === 'shorts' 
+                          ? 'bg-purple-600 border-purple-500 text-white shadow-[0_0_15px_rgba(147,51,234,0.3)]' 
+                          : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                      }`}
+                    >
+                      ✂️ Find AI Hooks
+                    </button>
+                    <button 
+                      onClick={() => setProcessingMode('full')}
+                      className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                        processingMode === 'full' 
+                          ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]' 
+                          : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
+                      }`}
+                    >
+                      🎬 Subtitle Full Video
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Master Action Button */}
               <div className="pt-4 border-t border-gray-800 mt-6">
                 <button 
-                  onClick={handleGenerate}
+                  onClick={inputType === 'video' && processingMode === 'full' ? handleFullVideo : handleGenerate}
                   className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-emerald-600/20"
                 >
                   Generate Viral Video 🚀
                 </button>
               </div>
               
+            </div>
+          )}
+
+          {/* State: Finished Video */}
+          {step === 'done' && (
+            <div className="max-w-xl mx-auto bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl text-center animate-fade-in">
+              <h2 className="text-3xl font-extrabold text-white mb-2">🎉 Video Ready!</h2>
+              <p className="text-gray-400 mb-6">Your viral short is cooked. Download it before it expires in 10 mins.</p>
+              
+              {/* The Video Player */}
+              <div className="relative w-64 mx-auto rounded-xl overflow-hidden shadow-2xl shadow-emerald-500/20 border-4 border-gray-800 mb-8">
+                <video 
+                  src={finalVideoUrl} 
+                  controls 
+                  autoPlay 
+                  loop 
+                  className="w-full h-auto"
+                />
+              </div>
+
+              <div className="flex gap-4">
+                {/* Back Button */}
+                <button 
+                  onClick={() => {
+                    setStep('idle');
+                    setRedditUrl('');
+                  }}
+                  className="flex-1 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-bold text-lg transition-all"
+                >
+                  Start Over
+                </button>
+
+                {/* Download Button */}
+                <a 
+                  href={finalVideoUrl} 
+                  download="MakeShort_Viral.mp4"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-lg transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
+                >
+                  ⬇️ Download
+                </a>
+              </div>
             </div>
           )}
 
