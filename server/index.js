@@ -3,6 +3,16 @@ const path = require('path');
 const axios = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const cloudinary = require('cloudinary').v2;
+// 🗄️ THE DATABASE: Initialize Supabase
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+
+cloudinary.config({ 
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY, 
+  api_secret: process.env.CLOUDINARY_API_SECRET 
+});
 
 console.log("TESTING API KEYS:");
 console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
@@ -13,9 +23,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { exec } = require('child_process');
-const ffmpeg = require('fluent-ffmpeg');
 const Groq = require('groq-sdk');
-const fs = require('fs');
 const { GoogleGenAI } = require('@google/genai');
 const multer = require('multer'); // 📦 Added Multer for local uploads
 
@@ -340,7 +348,8 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
 // 🟢 NEW: The Magic Reddit Scraper Route
 app.post('/api/generate-reddit', async (req, res) => {
   try {
-    const { redditUrl } = req.body;
+    // 🟢 NEW: We are now accepting userId from the frontend!
+    const { redditUrl, userId } = req.body; 
     if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
 
     console.log(`🕵️‍♂️ 1. Scraping Reddit: ${redditUrl}`);
@@ -443,32 +452,57 @@ Format: Layer, Start, End, Style, Text\n`;
       .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
       .outputOptions(['-c:v libx264', '-c:a aac', '-shortest'])
       .save(finalOutputPath)
-      .on('end', () => {
-        console.log(`🚀 SUCCESS! Final video saved to: ${finalOutputPath}`);
-        
-        // Create a URL the frontend can use to play the video
-        // Make sure to replace API_URL with your actual Render URL in production!
-        const serverUrl = req.protocol + '://' + req.get('host');
-        const publicVideoUrl = `${serverUrl}/temp/final_tiktok_${timestamp}.mp4`;
+    .on('end', async () => {
+        console.log(`🚀 Video stitched locally: ${finalOutputPath}`);
+        console.log(`☁️ Uploading to Cloudinary (this might take a few seconds)...`);
 
-        // Send the URL back to the user
-        res.json({ 
-          success: true, 
-          message: 'Video complete!', 
-          videoUrl: publicVideoUrl 
-        });
+        try {
+          // 1. Upload to Cloudinary
+          const uploadResult = await cloudinary.uploader.upload(finalOutputPath, {
+            resource_type: "video",
+            folder: "makeshort_viral" 
+          });
 
-        // 🧹 THE TIME BOMB: Delete all temp files after 10 minutes
-        setTimeout(() => {
-          try {
-            if (fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
-            if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-            if (fs.existsSync(assPath)) fs.unlinkSync(assPath);
-            console.log(`🧹 10 min passed. Cleaned up temp files for timestamp: ${timestamp}`);
-          } catch (err) {
-            console.error('❌ Cleanup error:', err.message);
+          console.log(`✅ Cloudinary Upload Success! URL: ${uploadResult.secure_url}`);
+
+          // 🟢 NEW 2. Save to Supabase (If the user is logged in)
+          if (userId) {
+            console.log(`🗄️ Saving video to Supabase for user: ${userId}...`);
+            const { error: dbError } = await supabase
+              .from('videos')
+              .insert([
+                {
+                  user_id: userId,
+                  video_url: uploadResult.secure_url,
+                  title: postData.title.substring(0, 50) + "...", // Save a short version of the Reddit title
+                  type: 'reddit'
+                }
+              ]);
+
+            if (dbError) {
+              console.error('❌ Supabase Error:', dbError);
+            } else {
+              console.log('✅ Successfully saved to Database!');
+            }
           }
-        }, 10 * 60 * 1000); // 10 minutes in milliseconds
+
+          // 3. Send the response back to the frontend
+          res.json({ 
+            success: true, 
+            message: 'Video complete!', 
+            videoUrl: uploadResult.secure_url 
+          });
+
+          // 4. Cleanup local files
+          if (fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
+          if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+          if (fs.existsSync(assPath)) fs.unlinkSync(assPath);
+          console.log(`🧹 Cleaned up local temp files.`);
+
+        } catch (uploadError) {
+          console.error('❌ Cloudinary/DB Error:', uploadError);
+          res.status(500).json({ error: 'Failed to save video.' });
+        }
       })
 
   } catch (error) {
@@ -568,8 +602,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\
             const activeWord = chunk[j];
             const startSec = Math.max(0, (activeWord.start || 0) - clipStart);
             let endSec = (j < chunk.length - 1) ? Math.max(0, (chunk[j + 1].start || 0) - clipStart) : Math.max(0, (activeWord.end || 0) - clipStart);
-            const startTime = formatASSTime(startSec);
-            const endTime = formatASSTime(endSec);
+            const startTime = formatAssTime(startSec);
+            const endTime = formatAssTime(endSec);
             let lineText = chunk.map((w, index) => {
                 const wordText = w.word.trim();
                 if (index === j) return `{\\c&H00FFFF&}${wordText}{\\c&HFFFFFF&}`;
