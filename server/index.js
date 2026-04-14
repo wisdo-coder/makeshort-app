@@ -385,14 +385,14 @@ console.log("🔑 KEY CHECK:", process.env.ELEVENLABS_API_KEY ? `Starts with: ${
   'Content-Type': 'application/json',
   'xi-api-key': process.env.ELEVENLABS_API_KEY // 👈 THIS IS CRITICAL
 },
-         data: {
-  text: fullScript,
-  model_id: "eleven_turbo_v2_5", // 👈 Change this line
-  voice_settings: {
-    stability: 0.5,
-    similarity_boost: 0.5
-  }
-},
+        data: {
+    text: fullScript,
+    model_id: "eleven_turbo_v2_5", // 👈 Change this line
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.5
+    }
+  },
           responseType: 'arraybuffer'
         });
     } catch (elevenError) {
