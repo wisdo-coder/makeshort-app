@@ -1,3 +1,4 @@
+ffmpeg.setFfmpegPath(require('ffmpeg-static'));
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -372,7 +373,7 @@ app.post('/api/generate-reddit', async (req, res) => {
     io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); // 👈 ADDED WEBSOCKET
 
     // Add this right before the try/catch block for ElevenLabs
-console.log("🔑 KEY CHECK:", process.env.ELEVENLABS_API_KEY ? `Key exists and starts with: ${process.env.ELEVENLABS_API_KEY.substring(0, 5)}...` : "🚨 KEY IS UNDEFINED!");
+console.log("🔑 KEY CHECK:", process.env.ELEVENLABS_API_KEY ? `Starts with: ${process.env.ELEVENLABS_API_KEY.substring(0, 5)}... Total Length: ${process.env.ELEVENLABS_API_KEY.length}` : "🚨 KEY IS UNDEFINED!");
 
     let elevenLabsResponse;
     try {
@@ -464,14 +465,18 @@ Format: Layer, Start, End, Style, Text\n`;
     const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
 
     const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
-
-    ffmpeg()
+ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
       .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
       .outputOptions(['-c:v libx264', '-c:a aac', '-shortest'])
       .save(finalOutputPath)
-    .on('end', async () => {
+      .on('error', (err) => { // 👈 ADD THIS BLOCK
+          console.error(`❌ FFmpeg Error:`, err.message);
+          io.emit('status-update', { message: '❌ Video stitching failed!' });
+      })
+      .on('end', async () => {
+          // ... rest of your code ...
         console.log(`🚀 Video stitched locally: ${finalOutputPath}`);
         io.emit('status-update', { message: '☁️ Uploading to cloud...' }); // 👈 ADDED WEBSOCKET
 
