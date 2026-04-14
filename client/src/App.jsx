@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';  
 import axios from 'axios';
 import SubtitleEditor from './components/SubtitleEditor';
-import { SignedIn, SignedOut, SignIn, UserButton } from "@clerk/clerk-react";
+import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import gsap from 'gsap';
 
 const API_URL = 'https://makeshort-backend.onrender.com';
@@ -22,6 +22,7 @@ function App() {
   const [processingMode, setProcessingMode] = useState('shorts'); 
   const [renderProgress, setRenderProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
+  const { userId } = useAuth();
 
   useEffect(() => {
     const socket = io(API_URL, {
@@ -51,14 +52,14 @@ function App() {
      } else if (inputType === 'reddit') {
         if (!redditUrl) return alert("Please paste a Reddit link!");
         
-        // Let the user know the magic is happening
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
+        // 🟢 NEW: Send the userId to the backend!
         const { data } = await axios.post(`${API_URL}/api/generate-reddit`, {
-          redditUrl: redditUrl
+          redditUrl: redditUrl,
+          userId: userId 
         });
 
-        // Save the URL and switch to the final download screen
         setFinalVideoUrl(data.videoUrl);
         setStep('done');
         
