@@ -300,6 +300,14 @@ function App() {
             </div>
           )}
 
+          {step === 'processing' && (
+  <div className="text-center py-20 animate-fade-in">
+    <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+    <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
+    {/* Optional: Add a progress bar if you want to use the renderProgress state */}
+  </div>
+)}
+
           {/* State: Finished Video */}
           {step === 'done' && (
             <div className="max-w-xl mx-auto bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl text-center animate-fade-in">
