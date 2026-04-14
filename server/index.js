@@ -17,7 +17,7 @@ cloudinary.config({
 console.log("TESTING API KEYS:");
 console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
 console.log("Gemini Key Found:", !!process.env.GEMINI_API_KEY);
-console.log("ElevenLabs Key:", process.env.ELEVENLABS_API_KEY);
+console.log("ElevenLabs Key Found:", !!process.env.ELEVENLABS_API_KEY);
 
 const express = require('express');
 const http = require('http');
@@ -371,19 +371,22 @@ app.post('/api/generate-reddit', async (req, res) => {
     console.log(`🎙️ 2. Generating ElevenLabs AI Voice...`);
     io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); // 👈 ADDED WEBSOCKET
 
+    // Add this right before the try/catch block for ElevenLabs
+console.log("🔑 KEY CHECK:", process.env.ELEVENLABS_API_KEY ? `Key exists and starts with: ${process.env.ELEVENLABS_API_KEY.substring(0, 5)}...` : "🚨 KEY IS UNDEFINED!");
+
     let elevenLabsResponse;
     try {
         elevenLabsResponse = await axios({
           method: 'post',
           url: `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': process.env.ELEVENLABS_API_KEY 
-          },
-          data: {
+         headers: {
+  'Accept': 'audio/mpeg',
+  'Content-Type': 'application/json',
+  'xi-api-key': process.env.ELEVENLABS_API_KEY // 👈 THIS IS CRITICAL
+},
+         data: {
   text: fullScript,
-  model_id: "eleven_monolingual_v1",
+  model_id: "eleven_turbo_v2_5", // 👈 Change this line
   voice_settings: {
     stability: 0.5,
     similarity_boost: 0.5
