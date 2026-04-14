@@ -1,4 +1,7 @@
+const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
+const ffmpeg = require('fluent-ffmpeg');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 console.log("TESTING API KEYS:");
@@ -67,6 +70,8 @@ const io = new Server(server, {
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use('/output', express.static(outputDir));
+// This lets the frontend access the videos inside the temp folder!
+app.use('/temp', express.static(path.join(__dirname, 'temp')));
 
 io.on('connection', (socket) => {
     console.log('Client connected for WebSocket updates');
@@ -289,7 +294,7 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
         }
-        
+
         // 3. Format words safely (copying your bulletproof logic from Route 1)
         let wordsArray = [];
         if (transcription.words) {
@@ -330,6 +335,146 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
         console.error("Transcription failed:", error);
         res.status(500).json({ error: "Transcription failed" });
     }
+});
+
+// 🟢 NEW: The Magic Reddit Scraper Route
+app.post('/api/generate-reddit', async (req, res) => {
+  try {
+    const { redditUrl } = req.body;
+    if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
+
+    console.log(`🕵️‍♂️ 1. Scraping Reddit: ${redditUrl}`);
+    let cleanUrl = redditUrl.split('?')[0]; 
+    if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
+    
+    const redditResponse = await axios.get(`${cleanUrl}.json`, {
+      headers: { 'User-Agent': 'MakeShort-MVP/1.0' }
+    });
+
+    const postData = redditResponse.data[0].data.children[0].data;
+    const story = postData.selftext;
+    if (!story) return res.status(400).json({ error: 'Post has no text.' });
+
+    const fullScript = `${postData.title}... ${story}`.substring(0, 1000); 
+
+    console.log(`🎙️ 2. Generating ElevenLabs AI Voice...`);
+    const elevenLabsResponse = await axios({
+      method: 'post',
+      url: `https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB`,
+      headers: {
+        'Accept': 'audio/mpeg',
+        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      data: {
+        text: fullScript,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: { stability: 0.5, similarity_boost: 0.5 }
+      },
+      responseType: 'arraybuffer'
+    });
+
+    const outputDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+    
+    const timestamp = Date.now();
+    const audioPath = path.join(outputDir, `voice_${timestamp}.mp3`);
+    fs.writeFileSync(audioPath, elevenLabsResponse.data);
+
+    console.log(`🧠 3. Analyzing audio with Deepgram...`);
+    const audioBuffer = fs.readFileSync(audioPath);
+    const deepgramResponse = await axios({
+      method: 'post',
+      url: 'https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true',
+      headers: {
+        'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+        'Content-Type': 'audio/mpeg'
+      },
+      data: audioBuffer
+    });
+
+    const wordsArray = deepgramResponse.data.results.channels[0].alternatives[0].words;
+
+    console.log(`✍️ 4. Generating Subtitle File...`);
+    // Chunk the words (3 words per screen)
+    let chunks = [];
+    for (let i = 0; i < wordsArray.length; i += 3) {
+        const chunk = wordsArray.slice(i, i + 3);
+        chunks.push({
+            start: chunk[0].start,
+            end: chunk[chunk.length - 1].end,
+            text: chunk.map(w => w.word).join(' ')
+        });
+    }
+
+    // Create the .ass file structure
+    let assContent = `[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Alignment, MarginV
+Style: Main,Arial,110,&H0000FFFF,&H00000000,&H00000000,-1,5,960
+
+[Events]
+Format: Layer, Start, End, Style, Text\n`;
+
+    chunks.forEach(chunk => {
+        assContent += `Dialogue: 0,${formatAssTime(chunk.start)},${formatAssTime(chunk.end)},Main,${chunk.text}\n`;
+    });
+
+    const assPath = path.join(outputDir, `subs_${timestamp}.ass`);
+    fs.writeFileSync(assPath, assContent);
+
+    console.log(`🎬 5. Final Video Stitching...`);
+    const backgrounds = ['background1.mp4', 'background2.mp4'];
+    const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
+    const backgroundVideoPath = path.join(__dirname, 'assets', randomBg);
+    const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
+
+    // FFmpeg needs the subtitle path formatting to be slightly tweaked for Windows users running locally
+    const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
+
+    ffmpeg()
+      .input(backgroundVideoPath)
+      .input(audioPath)
+      // Crop to 9:16 AND burn the subtitles into the video!
+      .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
+      .outputOptions(['-c:v libx264', '-c:a aac', '-shortest'])
+      .save(finalOutputPath)
+      .on('end', () => {
+        console.log(`🚀 SUCCESS! Final video saved to: ${finalOutputPath}`);
+        
+        // Create a URL the frontend can use to play the video
+        // Make sure to replace API_URL with your actual Render URL in production!
+        const serverUrl = req.protocol + '://' + req.get('host');
+        const publicVideoUrl = `${serverUrl}/temp/final_tiktok_${timestamp}.mp4`;
+
+        // Send the URL back to the user
+        res.json({ 
+          success: true, 
+          message: 'Video complete!', 
+          videoUrl: publicVideoUrl 
+        });
+
+        // 🧹 THE TIME BOMB: Delete all temp files after 10 minutes
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
+            if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+            if (fs.existsSync(assPath)) fs.unlinkSync(assPath);
+            console.log(`🧹 10 min passed. Cleaned up temp files for timestamp: ${timestamp}`);
+          } catch (err) {
+            console.error('❌ Cleanup error:', err.message);
+          }
+        }, 10 * 60 * 1000); // 10 minutes in milliseconds
+      })
+
+  } catch (error) {
+    console.error('❌ Error Pipeline:', error.message);
+    res.status(500).json({ error: 'Generation failed.' });
+  }
 });
 
 // ==========================================
@@ -436,14 +581,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\
     return assContent;
 }
 
-function formatASSTime(seconds) {
-    const date = new Date(0);
-    date.setSeconds(seconds);
-    const hh = Math.floor(seconds / 3600);
-    const mm = date.toISOString().substr(14, 2);
-    const ss = date.toISOString().substr(17, 2);
+function formatAssTime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
     const cs = Math.floor((seconds % 1) * 100).toString().padStart(2, '0');
-    return `${hh}:${mm}:${ss}.${cs}`;
+    return `${h}:${m}:${s}.${cs}`;
 }
 
 // 🟢 NEW: Receives aspectRatio to decide if it should crop or not!
