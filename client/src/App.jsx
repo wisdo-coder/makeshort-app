@@ -317,13 +317,23 @@ function App() {
             </div>
           )}
 
-          {/* State 2: Processing */}
-          {step === 'processing' && (
-            <div className="text-center py-20 animate-fade-in">
-              <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-              <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
-            </div>
-          )}
+         {/* State 2: Processing */}
+{step === 'processing' && (
+  <div className="text-center py-20 animate-fade-in max-w-md mx-auto">
+    <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+    <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
+    
+    {/* Add the progress bar here */}
+    {renderProgress > 0 && (
+      <div className="w-full bg-gray-800 rounded-full h-4 mt-6 overflow-hidden border border-gray-700">
+        <div 
+          className="bg-gradient-to-r from-blue-500 to-emerald-500 h-4 rounded-full transition-all duration-300" 
+          style={{ width: `${renderProgress}%` }}
+        ></div>
+      </div>
+    )}
+  </div>
+)}
 
           {/* 🟢 NEW: State 3: Clip Selection (This is what you were missing!) */}
           {step === 'editing' && (
