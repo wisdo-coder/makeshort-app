@@ -9,8 +9,7 @@ const API_URL = 'https://makeshort-backend.onrender.com';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
-  // 🟢 NEW: State for our new input methods
-  const [inputType, setInputType] = useState('reddit'); // 'reddit', 'text', 'video'
+  const [inputType, setInputType] = useState('reddit'); 
   const [redditUrl, setRedditUrl] = useState('');
   const [scriptText, setScriptText] = useState('');
 
@@ -45,35 +44,31 @@ function App() {
         if (!videoFile) return alert("Please select a video file!");
         const formData = new FormData();
         formData.append('videoFile', videoFile); 
+        
+        setStatusMessage('Extracting viral clips... ✂️');
         const { data } = await axios.post(`${API_URL}/api/generate`, formData);
+        
+        // Save the clips and move to the editing UI!
         setClips(data.clips);
         setStep('editing'); 
 
-    } else if (inputType === 'reddit') {
+      } else if (inputType === 'reddit') {
         if (!redditUrl) return alert("Please paste a Reddit link!");
-        
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
-        // Send the userId to the backend!
         const { data } = await axios.post(`${API_URL}/api/generate-reddit`, {
           redditUrl: redditUrl,
           userId: userId 
         });
 
-        // 🟢 Show the video and STOP! No more code after this.
         setFinalVideoUrl(data.videoUrl);
         setStep('done');
-        
         console.log("✅ SCRAPED SCRIPT:", data.script);
         alert(`Successfully scraped: ${data.title}\n(Check your console to read the whole story!)`);
-        
-        // We will move to the next step once we add the Voice AI!
-        setStep('idle'); 
 
       } else {
         if (!scriptText) return alert("Please write a script!");
         setStatusMessage('Analyzing script... 🧠');
-        // Placeholder for Text Script logic
         setTimeout(() => setStep('editing'), 2000);
       }
     } catch (err) {
@@ -100,8 +95,31 @@ function App() {
     }
   };
 
-  const handleRender = async (editedClip) => { /* keeping your existing logic */ };
-  const handleStartOver = async () => { /* keeping your existing logic */ };
+  // 🟢 NEW: Actual Render Logic instead of empty placeholder
+  const handleRender = async (editedClip) => { 
+    setStep('processing');
+    setStatusMessage('Rendering final video with AI Captions... 🎬');
+    try {
+      // Assumes your backend has a /api/render endpoint. Adjust if needed!
+      const { data } = await axios.post(`${API_URL}/api/render`, { clip: editedClip });
+      setFinalVideoUrl(data.videoUrl || data.url);
+      setStep('done');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to render video. Check console.');
+      setStep('editing');
+    }
+  };
+
+  // 🟢 NEW: Clean reset logic
+  const handleStartOver = () => { 
+    setStep('idle');
+    setVideoFile(null);
+    setRedditUrl('');
+    setScriptText('');
+    setClips([]);
+    setFinalVideoUrl('');
+  };
 
   const mainContainerRef = useRef(null);
   useEffect(() => {
@@ -123,7 +141,7 @@ function App() {
 
       <div className="max-w-5xl mx-auto px-6 py-12">
         
-        {/* 🔒 LOGGED OUT STATE: The High-Converting Landing Page */}
+        {/* 🔒 LOGGED OUT STATE */}
         <SignedOut>
           <div className="text-center max-w-3xl mx-auto mb-12 mt-8 animate-fade-in">
             <div className="inline-block px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-sm mb-6">
@@ -142,7 +160,6 @@ function App() {
                 <SignIn routing="hash" />
               </div>
               
-              {/* Fake Video Preview to build trust */}
               <div className="hidden md:flex flex-col items-center">
                 <div className="w-48 h-[340px] bg-black border-4 border-gray-800 rounded-2xl relative overflow-hidden shadow-2xl shadow-emerald-500/20">
                   <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent z-10"></div>
@@ -157,7 +174,7 @@ function App() {
           </div>
         </SignedOut>
 
-        {/* 🔓 LOGGED IN STATE: The App Dashboard */}
+        {/* 🔓 LOGGED IN STATE */}
         <SignedIn>
           <header className="text-center mb-12">
             <h1 className="text-4xl font-extrabold text-white">Dashboard</h1>
@@ -231,7 +248,7 @@ function App() {
                 )}
               </div>
 
-              {/* 🟢 RESTORED: Format Options (Shows for all inputs) */}
+              {/* Format Options */}
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2 mt-2">Choose Format</label>
                 <div className="flex gap-4">
@@ -258,7 +275,7 @@ function App() {
                 </div>
               </div>
 
-              {/* 🟢 RESTORED: Goal Options (Only shows for Video uploads) */}
+              {/* Goal Options */}
               {inputType === 'video' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">Choose Goal</label>
@@ -300,21 +317,91 @@ function App() {
             </div>
           )}
 
+          {/* State 2: Processing */}
           {step === 'processing' && (
-  <div className="text-center py-20 animate-fade-in">
-    <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-    <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
-    {/* Optional: Add a progress bar if you want to use the renderProgress state */}
-  </div>
-)}
+            <div className="text-center py-20 animate-fade-in">
+              <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+              <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
+            </div>
+          )}
 
-          {/* State: Finished Video */}
+          {/* 🟢 NEW: State 3: Clip Selection (This is what you were missing!) */}
+          {step === 'editing' && (
+            <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-3xl font-extrabold text-white">✂️ Choose Your Viral Clip</h2>
+                <button onClick={handleStartOver} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-bold transition">
+                  Start Over
+                </button>
+              </div>
+
+              {clips.length === 0 ? (
+                 <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
+                    <p className="text-gray-400">No clips found. Try uploading a different video.</p>
+                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {clips.map((clip, idx) => (
+                    <div key={idx} className="bg-gray-900 border border-gray-800 p-6 rounded-xl hover:border-emerald-500 transition shadow-xl flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start mb-4">
+                          <h3 className="text-xl font-bold text-white">Clip {idx + 1}</h3>
+                          <span className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/30">
+                            High Potential
+                          </span>
+                        </div>
+                        <p className="text-gray-400 text-sm mb-6 h-24 overflow-hidden relative italic">
+                          "{clip.transcript || clip.text || 'No transcript generated...'}"
+                          <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-gray-900 to-transparent"></div>
+                        </p>
+                      </div>
+                      
+                      <div className="flex gap-3 mt-auto">
+                        <button
+                          onClick={() => {
+                            setActiveClipIndex(idx);
+                            setStep('editor'); 
+                          }}
+                          className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-bold text-sm transition"
+                        >
+                          ✏️ Edit text
+                        </button>
+                        <button
+                          onClick={() => handleRender(clip)}
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition"
+                        >
+                          🚀 Render
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 🟢 NEW: State 4: Subtitle Editor Wrapper */}
+          {step === 'editor' && (
+            <div className="max-w-4xl mx-auto bg-gray-900 p-6 rounded-xl border border-gray-800 animate-fade-in">
+              <button 
+                onClick={() => setStep('editing')} 
+                className="text-gray-400 hover:text-white mb-6 flex items-center gap-2 font-bold"
+              >
+                ← Back to Clips
+              </button>
+              <SubtitleEditor 
+                clip={clips[activeClipIndex]} 
+                onRender={handleRender} 
+              />
+            </div>
+          )}
+
+          {/* State 5: Finished Video */}
           {step === 'done' && (
             <div className="max-w-xl mx-auto bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl text-center animate-fade-in">
               <h2 className="text-3xl font-extrabold text-white mb-2">🎉 Video Ready!</h2>
               <p className="text-gray-400 mb-6">Your viral short is cooked. Download it before it expires in 10 mins.</p>
               
-              {/* The Video Player */}
               <div className="relative w-64 mx-auto rounded-xl overflow-hidden shadow-2xl shadow-emerald-500/20 border-4 border-gray-800 mb-8">
                 <video 
                   src={finalVideoUrl} 
@@ -326,18 +413,13 @@ function App() {
               </div>
 
               <div className="flex gap-4">
-                {/* Back Button */}
                 <button 
-                  onClick={() => {
-                    setStep('idle');
-                    setRedditUrl('');
-                  }}
+                  onClick={handleStartOver}
                   className="flex-1 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-bold text-lg transition-all"
                 >
                   Start Over
                 </button>
 
-                {/* Download Button */}
                 <a 
                   href={finalVideoUrl} 
                   download="MakeShort_Viral.mp4"
@@ -350,8 +432,6 @@ function App() {
               </div>
             </div>
           )}
-
-          {/* ... The rest of your processing/editing states remain exactly the same ... */}
           
         </SignedIn>
       </div>
