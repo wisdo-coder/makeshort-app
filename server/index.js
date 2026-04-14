@@ -17,7 +17,7 @@ cloudinary.config({
 console.log("TESTING API KEYS:");
 console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
 console.log("Gemini Key Found:", !!process.env.GEMINI_API_KEY);
-console.log("ElevenLabs Key Found:", !!process.env.ELEVENLABS_API_KEY); // 👈 ADD THIS
+console.log("ElevenLabs Key:", process.env.ELEVENLABS_API_KEY);
 
 const express = require('express');
 const http = require('http');
@@ -382,10 +382,13 @@ app.post('/api/generate-reddit', async (req, res) => {
             'xi-api-key': process.env.ELEVENLABS_API_KEY 
           },
           data: {
-            text: fullScript,
-            model_id: 'eleven_monolingual_v1',
-            voice_settings: { stability: 0.5, similarity_boost: 0.5 }
-          },
+  text: fullScript,
+  model_id: "eleven_monolingual_v1",
+  voice_settings: {
+    stability: 0.5,
+    similarity_boost: 0.5
+  }
+},
           responseType: 'arraybuffer'
         });
     } catch (elevenError) {
