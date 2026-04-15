@@ -318,10 +318,11 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
         }
 
         // Example of the safety check you need:
-if (!transcript || transcript.trim() === "") {
+// 🟢 FIXED: Using "transcription" instead of "transcript", and checking the ".text" property
+if (!transcription || !transcription.text || transcription.text.trim() === "") {
     console.log("❌ Transcription failed entirely. Aborting.");
     io.emit('status-update', { message: '❌ Failed to transcribe audio. Please try again.' });
-    return; // 🟢 THIS stops it from going to Step 4 and 5 and hanging your server!
+    return; 
 }
 
         let wordsArray = [];
