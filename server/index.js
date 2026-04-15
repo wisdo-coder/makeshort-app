@@ -244,18 +244,32 @@ async function processRenderInBackground(clip, aspectRatio) {
         const assContent = generateASS(clip.segments || [], clip.start, aspectRatio);
         fs.writeFileSync(subtitlePath, assContent);
         
+        // 1. Wait for FFmpeg to finish rendering locally on Render
         await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration, aspectRatio);
         
-        // 🟢 EMIT FINISHED VIDEO TO FRONTEND
+        io.emit('status-update', { message: '☁️ Uploading to cloud...' });
+
+        // 2. 🟢 Upload the local video to Cloudinary
+        const uploadResult = await cloudinary.uploader.upload(outputPath, {
+            resource_type: "video",
+            folder: "makeshort_viral" 
+        });
+        
+        // 3. 🟢 Emit the final Cloudinary URL back to Vercel
         io.emit('video-done', { 
             success: true, 
-            url: `/output/${clip.id}-final.mp4`
+            url: uploadResult.secure_url 
         });
-        io.emit('status-update', { message: '✅ Video perfectly rendered!' });
+        
+        io.emit('status-update', { message: '✅ Video perfectly rendered and uploaded!' });
+
+        // 4. 🧹 Clean up the local files so Render doesn't run out of storage space
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+        if (fs.existsSync(subtitlePath)) fs.unlinkSync(subtitlePath);
 
     } catch (error) {
-        console.error("Render failed:", error);
-        io.emit('status-update', { message: '❌ Rendering failed' });
+        console.error("Render/Upload failed:", error);
+        io.emit('status-update', { message: '❌ Rendering or upload failed' });
     }
 }
 
