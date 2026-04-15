@@ -473,13 +473,16 @@ Format: Layer, Start, End, Style, Text\n`;
       .input(audioPath)
       // 🟢 Wrapped escapedAssPath in single quotes (crucial for Linux)
       .videoFilters(`crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`) 
-      .outputOptions([
+     .outputOptions([
+          '-map 0:v:0',        // 🟢 FORCES the video from Input 0 (background.mp4)
+          '-map 1:a:0',        // 🟢 FORCES the audio from Input 1 (AI Voice.mp3)
           '-c:v libx264', 
-          '-preset ultrafast', // Maximum speed, lowest CPU usage
-          '-crf 32',           // Lower quality to prevent CPU freezing
-          '-threads 1',        // Force 1 thread so Render doesn't choke
+          '-preset ultrafast', 
+          '-crf 32',           
+          '-threads 1',        
           '-c:a aac', 
-          '-shortest'
+          '-shortest',         // 🟢 Now this will correctly stop at 49 seconds!
+          '-max_muxing_queue_size 1024'
       ])
       // 🟢 THE X-RAY GLASSES: These two events will print FFmpeg's internal thoughts to your Render logs
       .on('start', (commandLine) => {
@@ -657,13 +660,16 @@ Format: Layer, Start, End, Style, Text\n`;
       .input(audioPath)
       // 🟢 Wrapped escapedAssPath in single quotes (crucial for Linux)
       .videoFilters(`crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`) 
-      .outputOptions([
+    .outputOptions([
+          '-map 0:v:0',        // 🟢 FORCES the video from Input 0 (background.mp4)
+          '-map 1:a:0',        // 🟢 FORCES the audio from Input 1 (AI Voice.mp3)
           '-c:v libx264', 
-          '-preset ultrafast', // Maximum speed, lowest CPU usage
-          '-crf 32',           // Lower quality to prevent CPU freezing
-          '-threads 1',        // Force 1 thread so Render doesn't choke
+          '-preset ultrafast', 
+          '-crf 32',           
+          '-threads 1',        
           '-c:a aac', 
-          '-shortest'
+          '-shortest',         // 🟢 Now this will correctly stop at 49 seconds!
+          '-max_muxing_queue_size 1024'
       ])
       // 🟢 THE X-RAY GLASSES: These two events will print FFmpeg's internal thoughts to your Render logs
       .on('start', (commandLine) => {
