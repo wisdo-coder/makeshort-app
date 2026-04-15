@@ -39,7 +39,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // --- Auto-create required folders so FFmpeg doesn't crash ---
 const uploadsDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
-const assetsDir = path.join(__dirname, 'assets'); // 👈 ADDED: Prevent missing folder crash
+const assetsDir = path.join(__dirname, 'assets');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir);
@@ -83,17 +83,16 @@ const io = new Server(server, {
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// 🟢 FIXED: Exposed folders to frontend so videos actually load!
 app.use('/output', express.static(outputDir));
 app.use('/temp', express.static(path.join(__dirname, 'temp')));
 app.use('/uploads', express.static(uploadsDir)); 
 
 io.on('connection', (socket) => {
-    console.log('Client connected for WebSocket updates');
+    console.log('Client connected for WebSocket updates', socket.id);
 });
 
 // ==========================================
-// ROUTE: GET ALL LOCAL VIDEOS (Fix for "No Clips Found")
+// ROUTE: GET ALL LOCAL VIDEOS
 // ==========================================
 app.get('/api/videos', (req, res) => {
     fs.readdir(uploadsDir, (err, files) => {
@@ -133,9 +132,7 @@ app.post('/api/cleanup', (req, res) => {
 // ROUTE 1: GENERATE (Local Upload + AI Analysis)
 // ==========================================
 app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: "No video file was uploaded." });
-    }
+    if (!req.file) return res.status(400).json({ error: "No video file was uploaded." });
 
     const inputPath = req.file.path;
     const videoId = path.parse(req.file.filename).name; 
@@ -154,8 +151,6 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
         
         const stats = fs.statSync(audioPath);
-        console.log(`🎵 Audio file size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
-
         if (stats.size === 0) throw new Error("Extracted audio is 0 bytes. Video might not have sound.");
 
         let transcription = null;
@@ -168,15 +163,10 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
                     model: "whisper-large-v3",
                     response_format: "verbose_json", 
                 });
-                console.log(`✅ Transcription successful on attempt ${attempt}!`);
                 break; 
             } catch (error) {
                 console.warn(`⚠️ Groq Attempt ${attempt} failed:`, error.message);
-                if (attempt === groqRetries) {
-                    console.error("❌ Groq completely failed after multiple attempts.");
-                    throw new Error(`Groq API Error: ${error.message}`);
-                }
-                console.log(`⏳ Groq server hiccup. Waiting 3 seconds before trying again...`);
+                if (attempt === groqRetries) throw new Error(`Groq API Error: ${error.message}`);
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
         }
@@ -186,8 +176,7 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         
         const highlights = await getHighlightsFromAI(transcription.text);
 
-       console.log(`[5/5] Packaging draft clips...`);
-        
+        console.log(`[5/5] Packaging draft clips...`);
         let wordsArray = [];
         if (transcription.words) {
             wordsArray = transcription.words;
@@ -232,28 +221,43 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
     }
 });
 
+
 // ==========================================
-// ROUTE 2: RENDERING (FFmpeg & Subtitles)
+// ROUTE 2: RENDERING (FFmpeg & Subtitles) - 🟢 FIXED (ASYNC)
 // ==========================================
-app.post('/api/render', async (req, res) => {
+app.post('/api/render', (req, res) => {
     const { clip, aspectRatio } = req.body; 
+    
+    // 🟢 INSTANT RESPONSE: Prevents Render 100s timeout
+    res.status(202).json({ message: "Render started in background..." });
+
+    // Run in background without awaiting
+    processRenderInBackground(clip, aspectRatio).catch(err => console.error("Background Render Error:", err));
+});
+
+async function processRenderInBackground(clip, aspectRatio) {
     const subtitlePath = path.join(uploadsDir, `${clip.id}.ass`);
     const outputPath = path.join(outputDir, `${clip.id}-final.mp4`);
 
     try {
+        io.emit('status-update', { message: '🎬 Initializing render engine...' });
         const assContent = generateASS(clip.segments || [], clip.start, aspectRatio);
         fs.writeFileSync(subtitlePath, assContent);
+        
         await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration, aspectRatio);
         
-        res.json({ 
+        // 🟢 EMIT FINISHED VIDEO TO FRONTEND
+        io.emit('video-done', { 
             success: true, 
             url: `/output/${clip.id}-final.mp4`
         });
+        io.emit('status-update', { message: '✅ Video perfectly rendered!' });
+
     } catch (error) {
         console.error("Render failed:", error);
-        res.status(500).json({ error: "Rendering failed" });
+        io.emit('status-update', { message: '❌ Rendering failed' });
     }
-});
+}
 
 // ==========================================
 // ROUTE 3: 1-CLICK DOWNLOAD
@@ -292,15 +296,9 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
                     model: "whisper-large-v3",
                     response_format: "verbose_json", 
                 });
-                console.log(`✅ Transcription successful on attempt ${attempt}!`);
                 break; 
             } catch (error) {
-                console.warn(`⚠️ Groq Attempt ${attempt} failed:`, error.message);
-                if (attempt === groqRetries) {
-                    console.error("❌ Groq completely failed after multiple attempts.");
-                    throw new Error(`Groq API Error: ${error.message}`);
-                }
-                console.log(`⏳ Groq server hiccup. Waiting 3 seconds before trying again...`);
+                if (attempt === groqRetries) throw new Error(`Groq API Error: ${error.message}`);
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
         }
@@ -344,14 +342,23 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
     }
 });
 
-// ==========================================
-// ROUTE 5: REDDIT SCRAPER
-// ==========================================
-app.post('/api/generate-reddit', async (req, res) => {
-  try {
-    const { redditUrl, userId } = req.body; 
-    if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
 
+// ==========================================
+// ROUTE 5: REDDIT SCRAPER - 🟢 FIXED (ASYNC)
+// ==========================================
+app.post('/api/generate-reddit', (req, res) => {
+  const { redditUrl, userId } = req.body; 
+  if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
+
+  // 🟢 INSTANT RESPONSE: Prevents Render 100s timeout
+  res.status(202).json({ message: "Job accepted. Cooking video in background..." });
+
+  // Run in background without awaiting
+  processRedditInBackground(redditUrl, userId).catch(err => console.error("Background Reddit Error:", err));
+});
+
+async function processRedditInBackground(redditUrl, userId) {
+  try {
     console.log(`🕵️‍♂️ 1. Scraping Reddit: ${redditUrl}`);
     io.emit('status-update', { message: '🕵️‍♂️ Reading Reddit story...' }); 
 
@@ -364,7 +371,7 @@ app.post('/api/generate-reddit', async (req, res) => {
 
     const postData = redditResponse.data[0].data.children[0].data;
     const story = postData.selftext;
-    if (!story) return res.status(400).json({ error: 'Post has no text.' });
+    if (!story) throw new Error('Post has no text.');
 
     const fullScript = `${postData.title}... ${story}`.substring(0, 1000); 
 
@@ -396,7 +403,6 @@ app.post('/api/generate-reddit', async (req, res) => {
     const audioPath = path.join(tempDir, `voice_${timestamp}.mp3`);
     
     fs.writeFileSync(audioPath, Buffer.from(voiceResponse.data));
-    console.log(`✅ Audio saved successfully to: ${audioPath}`);
 
     console.log(`🧠 3. Analyzing audio with Deepgram...`);
     io.emit('status-update', { message: '🧠 Transcribing voice audio...' }); 
@@ -449,7 +455,6 @@ Format: Layer, Start, End, Style, Text\n`;
     console.log(`🎬 5. Final Video Stitching...`);
     io.emit('status-update', { message: '🎬 Rendering final video...' }); 
 
-    // Ensure backgrounds exist, otherwise use a fallback approach or error out gracefully
     const backgrounds = ['background1.mp4', 'background2.mp4'];
     const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
     const backgroundVideoPath = path.join(assetsDir, randomBg);
@@ -461,7 +466,6 @@ Format: Layer, Start, End, Style, Text\n`;
     const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
     const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
 
-    // 🟢 FIXED: Event listeners MUST come before `.save()`!
     ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
@@ -469,7 +473,7 @@ Format: Layer, Start, End, Style, Text\n`;
       .outputOptions([
           '-c:v libx264', 
           '-preset ultrafast', 
-          '-crf 28',           
+          '-crf 28',          
           '-c:a aac', 
           '-shortest'
       ])
@@ -498,7 +502,8 @@ Format: Layer, Start, End, Style, Text\n`;
               }]);
           }
 
-          res.json({ 
+          // 🟢 EMIT FINISHED VIDEO DIRECTLY TO THE FRONTEND SOCKET
+          io.emit('video-done', { 
             success: true, 
             message: 'Video complete!', 
             videoUrl: uploadResult.secure_url 
@@ -510,16 +515,16 @@ Format: Layer, Start, End, Style, Text\n`;
 
         } catch (uploadError) {
           console.error('❌ Cloudinary/DB Error:', uploadError);
-          res.status(500).json({ error: 'Failed to save video to cloud.' });
+          io.emit('status-update', { message: '❌ Failed to save video to cloud.' });
         }
       })
-      .save(finalOutputPath); // 👈 FIXED: Moved save to the very end
+      .save(finalOutputPath);
 
   } catch (error) {
     console.error('❌ Error Pipeline:', error.message);
-    res.status(500).json({ error: error.message }); 
+    io.emit('status-update', { message: `❌ Error: ${error.message}` });
   }
-});
+}
 
 // ==========================================
 // HELPER FUNCTIONS
@@ -552,7 +557,7 @@ ${text}`;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             if (attempt === 3) {
-                console.log("🔄 2.5-Flash is too busy. Swapping to backup model (gemini-2.5-flash-lite)...");
+                console.log("🔄 2.5-Flash is too busy. Swapping to backup model...");
                 currentModel = 'gemini-2.5-flash-lite'; 
             }
 
@@ -562,22 +567,16 @@ ${text}`;
                 config: { responseMimeType: "application/json" }
             });
 
-            // 🟢 FIXED: Strip away formatting blocks just in case Gemini gets chatty
             let cleanText = response.text || "";
             cleanText = cleanText.replace(/```json/g, '').replace(/```/g, '').trim();
 
             const parsed = JSON.parse(cleanText);
-            console.log(`✅ Gemini successful on attempt ${attempt} using ${currentModel}!`);
             return parsed.highlights || parsed;
             
         } catch (error) {
             console.warn(`⚠️ Gemini Attempt ${attempt} failed:`, error.message);
-            if (attempt === retries) {
-                console.error("❌ Failed to parse Gemini output after multiple attempts.");
-                throw error;
-            }
+            if (attempt === retries) throw error;
             const waitTime = attempt * 5000; 
-            console.log(`⏳ Waiting ${waitTime / 1000} seconds before trying again...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
         }
     }
