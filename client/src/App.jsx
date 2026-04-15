@@ -34,6 +34,13 @@ function App() {
     socket.on('render-progress', (data) => setRenderProgress(data.percent));
     socket.on('status-update', (data) => setStatusMessage(data.message));
 
+    // 🟢 NEW: Listen for the final video from the backend
+    socket.on('video-done', (data) => {
+      console.log("🎉 Video received via socket!", data);
+      setFinalVideoUrl(data.videoUrl || data.url);
+      setStep('done');
+    });
+
     return () => socket.disconnect();
   }, []);
 
@@ -48,7 +55,6 @@ function App() {
         setStatusMessage('Extracting viral clips... ✂️');
         const { data } = await axios.post(`${API_URL}/api/generate`, formData);
         
-        // Save the clips and move to the editing UI!
         setClips(data.clips);
         setStep('editing'); 
 
@@ -56,21 +62,28 @@ function App() {
         if (!redditUrl) return alert("Please paste a Reddit link!");
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
-        const { data } = await axios.post(`${API_URL}/api/generate-reddit`, {
+        // 🟢 NEW: Just kick off the process. Do NOT wait for the final video URL here!
+        await axios.post(`${API_URL}/api/generate-reddit`, {
           redditUrl: redditUrl,
           userId: userId 
         });
 
-        setFinalVideoUrl(data.videoUrl);
-        setStep('done');
-        console.log("✅ SCRAPED SCRIPT:", data.script);
-        alert(`Successfully scraped: ${data.title}\n(Check your console to read the whole story!)`);
+        // The socket listener 'video-done' will handle moving us to step 'done' when ready.
 
-      } else {
+     } else if (inputType === 'text') {
         if (!scriptText) return alert("Please write a script!");
-        setStatusMessage('Analyzing script... 🧠');
-        setTimeout(() => setStep('editing'), 2000);
+        setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
+        
+        // 🟢 Send the actual request to your backend
+        await axios.post(`${API_URL}/api/generate-text`, {
+          script: scriptText,
+          userId: userId 
+        });
+
+        // We DO NOT change the step to 'editing' here.
+        // The socket listener 'video-done' will handle moving us to step 'done' when the backend is finished.
       }
+      
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || "Error processing. Check console.");
@@ -95,23 +108,22 @@ function App() {
     }
   };
 
-  // 🟢 NEW: Actual Render Logic instead of empty placeholder
   const handleRender = async (editedClip) => { 
     setStep('processing');
     setStatusMessage('Rendering final video with AI Captions... 🎬');
     try {
-      // Assumes your backend has a /api/render endpoint. Adjust if needed!
-      const { data } = await axios.post(`${API_URL}/api/render`, { clip: editedClip });
-      setFinalVideoUrl(data.videoUrl || data.url);
-      setStep('done');
+      // 🟢 NEW: Just tell the backend to start rendering.
+      // Do NOT wait for the final video URL here! 
+      // Ensure your backend sends io.emit('video-done', { videoUrl: ... }) when it finishes.
+      await axios.post(`${API_URL}/api/render`, { clip: editedClip });
+      
     } catch (err) {
       console.error(err);
-      alert('Failed to render video. Check console.');
+      alert('Failed to start render. Check console.');
       setStep('editing');
     }
   };
 
-  // 🟢 NEW: Clean reset logic
   const handleStartOver = () => { 
     setStep('idle');
     setVideoFile(null);
@@ -119,6 +131,7 @@ function App() {
     setScriptText('');
     setClips([]);
     setFinalVideoUrl('');
+    setRenderProgress(0); // Reset progress just in case
   };
 
   const mainContainerRef = useRef(null);
@@ -317,25 +330,25 @@ function App() {
             </div>
           )}
 
-         {/* State 2: Processing */}
-{step === 'processing' && (
-  <div className="text-center py-20 animate-fade-in max-w-md mx-auto">
-    <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-    <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
-    
-    {/* Add the progress bar here */}
-    {renderProgress > 0 && (
-      <div className="w-full bg-gray-800 rounded-full h-4 mt-6 overflow-hidden border border-gray-700">
-        <div 
-          className="bg-gradient-to-r from-blue-500 to-emerald-500 h-4 rounded-full transition-all duration-300" 
-          style={{ width: `${renderProgress}%` }}
-        ></div>
-      </div>
-    )}
-  </div>
-)}
+          {/* State 2: Processing */}
+          {step === 'processing' && (
+            <div className="text-center py-20 animate-fade-in">
+              <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+              <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
+              
+              {/* 🟢 NEW: Progress Bar injected here */}
+              {renderProgress > 0 && (
+                <div className="max-w-md mx-auto w-full bg-gray-800 rounded-full h-4 mt-6 overflow-hidden border border-gray-700">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-emerald-500 h-4 rounded-full transition-all duration-300" 
+                    style={{ width: `${renderProgress}%` }}
+                  ></div>
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* 🟢 NEW: State 3: Clip Selection (This is what you were missing!) */}
+          {/* State 3: Clip Selection */}
           {step === 'editing' && (
             <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
               <div className="flex justify-between items-center mb-8">
@@ -362,7 +375,7 @@ function App() {
                         </div>
                         <p className="text-gray-400 text-sm mb-6 h-24 overflow-hidden relative italic">
                           "{clip.transcript || clip.text || 'No transcript generated...'}"
-                          <div className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-gray-900 to-transparent"></div>
+                          <span className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-gray-900 to-transparent"></span>
                         </p>
                       </div>
                       
@@ -390,7 +403,7 @@ function App() {
             </div>
           )}
 
-          {/* 🟢 NEW: State 4: Subtitle Editor Wrapper */}
+          {/* State 4: Subtitle Editor Wrapper */}
           {step === 'editor' && (
             <div className="max-w-4xl mx-auto bg-gray-900 p-6 rounded-xl border border-gray-800 animate-fade-in">
               <button 
