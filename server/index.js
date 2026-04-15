@@ -464,19 +464,31 @@ Format: Layer, Start, End, Style, Text\n`;
     }
 
     const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
-    const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
+    
+    // 🟢 Fix for Linux pathing: FFmpeg requires pure forward slashes
+    const escapedAssPath = assPath.replace(/\\/g, '/');
 
     ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
-      .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
+      // 🟢 Wrapped escapedAssPath in single quotes (crucial for Linux)
+      .videoFilters(`crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`) 
       .outputOptions([
           '-c:v libx264', 
-          '-preset ultrafast', 
-          '-crf 28',          
+          '-preset ultrafast', // Maximum speed, lowest CPU usage
+          '-crf 32',           // Lower quality to prevent CPU freezing
+          '-threads 1',        // Force 1 thread so Render doesn't choke
           '-c:a aac', 
           '-shortest'
       ])
+      // 🟢 THE X-RAY GLASSES: These two events will print FFmpeg's internal thoughts to your Render logs
+      .on('start', (commandLine) => {
+          console.log('🚀 Spawned FFmpeg with command: ' + commandLine);
+      })
+      .on('stderr', (stderrLine) => {
+          // This prints the frame-by-frame rendering progress and any hidden errors
+          console.log('FFmpeg Log: ' + stderrLine);
+      })
       .on('error', (err) => { 
           console.error(`❌ FFmpeg Error:`, err.message);
           io.emit('status-update', { message: '❌ Video stitching failed!' });
@@ -497,12 +509,11 @@ Format: Layer, Start, End, Style, Text\n`;
               .insert([{
                   user_id: userId,
                   video_url: uploadResult.secure_url,
-                  title: postData.title.substring(0, 50) + "...", 
+                  title: postData.title ? postData.title.substring(0, 50) + "..." : "Generated Video", 
                   type: 'reddit'
               }]);
           }
 
-          // 🟢 EMIT FINISHED VIDEO DIRECTLY TO THE FRONTEND SOCKET
           io.emit('video-done', { 
             success: true, 
             message: 'Video complete!', 
@@ -637,19 +648,31 @@ Format: Layer, Start, End, Style, Text\n`;
     }
 
     const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
-    const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
+    
+    // 🟢 Fix for Linux pathing: FFmpeg requires pure forward slashes
+    const escapedAssPath = assPath.replace(/\\/g, '/');
 
     ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
-      .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
+      // 🟢 Wrapped escapedAssPath in single quotes (crucial for Linux)
+      .videoFilters(`crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`) 
       .outputOptions([
           '-c:v libx264', 
-          '-preset ultrafast', 
-          '-crf 28',          
+          '-preset ultrafast', // Maximum speed, lowest CPU usage
+          '-crf 32',           // Lower quality to prevent CPU freezing
+          '-threads 1',        // Force 1 thread so Render doesn't choke
           '-c:a aac', 
           '-shortest'
       ])
+      // 🟢 THE X-RAY GLASSES: These two events will print FFmpeg's internal thoughts to your Render logs
+      .on('start', (commandLine) => {
+          console.log('🚀 Spawned FFmpeg with command: ' + commandLine);
+      })
+      .on('stderr', (stderrLine) => {
+          // This prints the frame-by-frame rendering progress and any hidden errors
+          console.log('FFmpeg Log: ' + stderrLine);
+      })
       .on('error', (err) => { 
           console.error(`❌ FFmpeg Error:`, err.message);
           io.emit('status-update', { message: '❌ Video stitching failed!' });
@@ -670,12 +693,11 @@ Format: Layer, Start, End, Style, Text\n`;
               .insert([{
                   user_id: userId,
                   video_url: uploadResult.secure_url,
-                  title: script.substring(0, 50) + "...", 
-                  type: 'text'
+                  title: postData.title ? postData.title.substring(0, 50) + "..." : "Generated Video", 
+                  type: 'reddit'
               }]);
           }
 
-          // 🟢 EMIT FINISHED VIDEO DIRECTLY TO THE FRONTEND SOCKET
           io.emit('video-done', { 
             success: true, 
             message: 'Video complete!', 
