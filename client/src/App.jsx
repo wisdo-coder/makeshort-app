@@ -425,18 +425,24 @@ function App() {
                 />
               </div>
 
-              {/* 🟢 REPAIRED SECTION: Safely showing Caption & Hashtags if they exist */}
-              {selectedClip && (selectedClip.caption || selectedClip.hashtags) && (
-                <div className="w-full bg-gray-950 p-4 rounded-xl border border-gray-800 text-left mb-8 shadow-inner">
-                  <p className="font-bold text-white mb-2 flex items-center gap-2">📝 AI Suggested Post:</p>
-                  <p className="text-sm text-gray-300 mb-3 leading-relaxed">
-                    {selectedClip.caption || "Checkout my latest video!"}
-                  </p>
-                  <p className="text-sm font-medium text-blue-400 break-words">
-                    {selectedClip.hashtags || "#viral #shorts"}
-                  </p>
-                </div>
-              )}
+              {/* 🟢 FIXED: Using the actual backend variable names! */}
+{selectedClip && selectedClip.socialCaption && (
+  <div className="w-full bg-gray-950 p-4 rounded-xl border border-gray-800 text-left mb-8 shadow-inner">
+    <p className="font-bold text-white mb-2 flex items-center gap-2">📝 AI Suggested Post:</p>
+    
+    <p className="text-sm text-gray-300 mb-3 leading-relaxed">
+      {selectedClip.socialCaption}
+    </p>
+
+    {/* Optional: You can also show the 'reason' your AI picked this clip! */}
+    {selectedClip.reason && (
+      <div className="mt-3 pt-3 border-t border-gray-800">
+        <p className="text-xs font-bold text-blue-400">🧠 Why this is viral:</p>
+        <p className="text-xs text-gray-400 mt-1 italic">{selectedClip.reason}</p>
+      </div>
+    )}
+  </div>
+)} 
 
               <div className="flex gap-4">
                 <button 
