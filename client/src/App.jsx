@@ -373,8 +373,8 @@ function App() {
                             High Potential
                           </span>
                         </div>
-                        <p className="italic text-gray-400 text-sm mb-4">
-    "{clip.description || clip.title || clip.text || 'No description available.'}"
+                       <p className="italic text-gray-400 text-sm mb-4">
+    "{clip.description || clip.summary || clip.title || clip.hook || clip.text || 'No transcript generated...'}"
 </p>
                       </div>
                       
