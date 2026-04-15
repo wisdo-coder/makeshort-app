@@ -521,14 +521,15 @@ Format: Layer, Start, End, Style, Text\n`;
           });
 
           if (userId) {
-            const { error: dbError } = await supabase
-              .from('videos')
-              .insert([{
-                  user_id: userId,
-                  video_url: uploadResult.secure_url,
-                  title: postData.title ? postData.title.substring(0, 50) + "..." : "Generated Video", 
-                  type: 'reddit'
-              }]);
+           // ✅ THE FIXED CODE
+const { error: dbError } = await supabase
+  .from('videos')
+  .insert([{
+      user_id: userId,
+      video_url: uploadResult.secure_url,
+      title: "Custom Script Video", // 🟢 Safe title, no postData required!
+      type: 'custom' // 🟢 Optional: change this so you know it wasn't a Reddit video
+  }]);
           }
 
           io.emit('video-done', { 
@@ -708,14 +709,15 @@ Format: Layer, Start, End, Style, Text\n`;
           });
 
           if (userId) {
-            const { error: dbError } = await supabase
-              .from('videos')
-              .insert([{
-                  user_id: userId,
-                  video_url: uploadResult.secure_url,
-                  title: postData.title ? postData.title.substring(0, 50) + "..." : "Generated Video", 
-                  type: 'reddit'
-              }]);
+           // ✅ THE FIXED CODE
+const { error: dbError } = await supabase
+  .from('videos')
+  .insert([{
+      user_id: userId,
+      video_url: uploadResult.secure_url,
+      title: "Custom Script Video", // 🟢 Safe title, no postData required!
+      type: 'custom' // 🟢 Optional: change this so you know it wasn't a Reddit video
+  }]);
           }
 
           io.emit('video-done', { 
