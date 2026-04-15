@@ -16,6 +16,7 @@ function App() {
   const [step, setStep] = useState('idle'); 
   const [clips, setClips] = useState([]);
   const [activeClipIndex, setActiveClipIndex] = useState(0);
+  const [selectedClip, setSelectedClip] = useState(null); // 🟢 Added this state so the app doesn't crash!
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   const [aspectRatio, setAspectRatio] = useState('9:16');
   const [processingMode, setProcessingMode] = useState('shorts'); 
@@ -34,7 +35,7 @@ function App() {
     socket.on('render-progress', (data) => setRenderProgress(data.percent));
     socket.on('status-update', (data) => setStatusMessage(data.message));
 
-    // 🟢 NEW: Listen for the final video from the backend
+    // 🟢 Listen for the final video from the backend
     socket.on('video-done', (data) => {
       console.log("🎉 Video received via socket!", data);
       setFinalVideoUrl(data.videoUrl || data.url);
@@ -62,26 +63,19 @@ function App() {
         if (!redditUrl) return alert("Please paste a Reddit link!");
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
-        // 🟢 NEW: Just kick off the process. Do NOT wait for the final video URL here!
         await axios.post(`${API_URL}/api/generate-reddit`, {
           redditUrl: redditUrl,
           userId: userId 
         });
 
-        // The socket listener 'video-done' will handle moving us to step 'done' when ready.
-
-     } else if (inputType === 'text') {
+      } else if (inputType === 'text') {
         if (!scriptText) return alert("Please write a script!");
         setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
         
-        // 🟢 Send the actual request to your backend
         await axios.post(`${API_URL}/api/generate-text`, {
           script: scriptText,
           userId: userId 
         });
-
-        // We DO NOT change the step to 'editing' here.
-        // The socket listener 'video-done' will handle moving us to step 'done' when the backend is finished.
       }
 
     } catch (err) {
@@ -109,14 +103,11 @@ function App() {
   };
 
   const handleRender = async (editedClip) => { 
+    setSelectedClip(editedClip); // 🟢 Save the clip to state so we can display its caption later
     setStep('processing');
     setStatusMessage('Rendering final video with AI Captions... 🎬');
     try {
-      // 🟢 NEW: Just tell the backend to start rendering.
-      // Do NOT wait for the final video URL here! 
-      // Ensure your backend sends io.emit('video-done', { videoUrl: ... }) when it finishes.
       await axios.post(`${API_URL}/api/render`, { clip: editedClip });
-      
     } catch (err) {
       console.error(err);
       alert('Failed to start render. Check console.');
@@ -130,8 +121,9 @@ function App() {
     setRedditUrl('');
     setScriptText('');
     setClips([]);
+    setSelectedClip(null);
     setFinalVideoUrl('');
-    setRenderProgress(0); // Reset progress just in case
+    setRenderProgress(0); 
   };
 
   const mainContainerRef = useRef(null);
@@ -336,7 +328,6 @@ function App() {
               <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
               <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
               
-              {/* 🟢 NEW: Progress Bar injected here */}
               {renderProgress > 0 && (
                 <div className="max-w-md mx-auto w-full bg-gray-800 rounded-full h-4 mt-6 overflow-hidden border border-gray-700">
                   <div 
@@ -374,8 +365,8 @@ function App() {
                           </span>
                         </div>
                        <p className="italic text-gray-400 text-sm mb-4">
-    "{clip.description || clip.summary || clip.title || clip.hook || clip.text || 'No transcript generated...'}"
-</p>
+                        "{clip.description || clip.summary || clip.title || clip.hook || clip.text || 'No description available.'}"
+                       </p>
                       </div>
                       
                       <div className="flex gap-3 mt-auto">
@@ -434,6 +425,19 @@ function App() {
                 />
               </div>
 
+              {/* 🟢 REPAIRED SECTION: Safely showing Caption & Hashtags if they exist */}
+              {selectedClip && (selectedClip.caption || selectedClip.hashtags) && (
+                <div className="w-full bg-gray-950 p-4 rounded-xl border border-gray-800 text-left mb-8 shadow-inner">
+                  <p className="font-bold text-white mb-2 flex items-center gap-2">📝 AI Suggested Post:</p>
+                  <p className="text-sm text-gray-300 mb-3 leading-relaxed">
+                    {selectedClip.caption || "Checkout my latest video!"}
+                  </p>
+                  <p className="text-sm font-medium text-blue-400 break-words">
+                    {selectedClip.hashtags || "#viral #shorts"}
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-4">
                 <button 
                   onClick={handleStartOver}
@@ -455,28 +459,6 @@ function App() {
             </div>
           )}
 
-          {/* Inside your Video Ready component */}
-<div className="flex flex-col items-center">
-    
-    {/* Your existing video player */}
-    <video src={finalVideoUrl} controls className="w-64 rounded-xl border border-gray-700" />
-
-    {/* 🟢 ADD THIS NEW SECTION: The Caption & Hashtag Box */}
-    {selectedClip && (
-        <div className="mt-4 w-64 bg-gray-800 p-4 rounded-lg text-sm text-gray-300">
-            <p className="font-semibold text-white mb-1">Post Caption:</p>
-            <p className="mb-2">{selectedClip.caption}</p>
-            <p className="text-blue-400">{selectedClip.hashtags}</p>
-        </div>
-    )}
-
-    {/* Your existing buttons */}
-    <div className="flex gap-4 mt-4">
-        <button className="bg-gray-700...">Start Over</button>
-        <button className="bg-green-500...">Download</button>
-    </div>
-</div>
-          
         </SignedIn>
       </div>
     </div>
