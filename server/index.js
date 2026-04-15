@@ -527,6 +527,179 @@ Format: Layer, Start, End, Style, Text\n`;
 }
 
 // ==========================================
+// ROUTE 6: TEXT SCRIPT TO VIDEO
+// ==========================================
+app.post('/api/generate-text', (req, res) => {
+  const { script, userId } = req.body; 
+  if (!script) return res.status(400).json({ error: 'Missing script text' });
+
+  // 🟢 INSTANT RESPONSE: Prevents Render 100s timeout
+  res.status(202).json({ message: "Job accepted. Cooking video in background..." });
+
+  // Run in background without awaiting
+  processTextInBackground(script, userId).catch(err => console.error("Background Text Error:", err));
+});
+
+async function processTextInBackground(script, userId) {
+  try {
+    console.log(`📝 1. Received Custom Script: ${script.substring(0, 30)}...`);
+    io.emit('status-update', { message: '📝 Reading your script...' }); 
+
+    // Limit to 1000 chars to avoid massive API bills, just like Reddit
+    const fullScript = script.substring(0, 1000); 
+
+    console.log(`🎙️ 2. Generating Deepgram AI Voice...`);
+    io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); 
+
+    let voiceResponse;
+    try {
+      voiceResponse = await axios({
+        method: 'post',
+        url: 'https://api.deepgram.com/v1/speak?model=aura-orion-en',
+        headers: {
+          'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`, 
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        },
+        data: { text: fullScript },
+        responseType: 'arraybuffer'
+      });
+    } catch (error) {
+       console.error("❌ Deepgram TTS Error:", error.response ? error.response.data : error.message);
+       throw new Error(`Deepgram Audio API failed!`);
+    }
+
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+    
+    const timestamp = Date.now();
+    const audioPath = path.join(tempDir, `voice_${timestamp}.mp3`);
+    
+    fs.writeFileSync(audioPath, Buffer.from(voiceResponse.data));
+
+    console.log(`🧠 3. Analyzing audio with Deepgram...`);
+    io.emit('status-update', { message: '🧠 Transcribing voice audio...' }); 
+    
+    const audioBuffer = fs.readFileSync(audioPath);
+    const deepgramResponse = await axios({
+      method: 'post',
+      url: 'https://api.deepgram.com/v1/listen?model=nova-2&smart_format=true',
+      headers: {
+        'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+        'Content-Type': 'audio/mpeg'
+      },
+      data: audioBuffer
+    });
+
+    const wordsArray = deepgramResponse.data.results.channels[0].alternatives[0].words;
+
+    console.log(`✍️ 4. Generating Subtitle File...`);
+    io.emit('status-update', { message: '✍️ Writing subtitles...' }); 
+
+    let chunks = [];
+    for (let i = 0; i < wordsArray.length; i += 3) {
+        const chunk = wordsArray.slice(i, i + 3);
+        chunks.push({
+            start: chunk[0].start,
+            end: chunk[chunk.length - 1].end,
+            text: chunk.map(w => w.word).join(' ')
+        });
+    }
+
+    let assContent = `[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Alignment, MarginV
+Style: Main,Arial,110,&H0000FFFF,&H00000000,&H00000000,-1,5,960
+
+[Events]
+Format: Layer, Start, End, Style, Text\n`;
+
+    chunks.forEach(chunk => {
+        assContent += `Dialogue: 0,${formatAssTime(chunk.start)},${formatAssTime(chunk.end)},Main,${chunk.text}\n`;
+    });
+
+    const assPath = path.join(tempDir, `subs_${timestamp}.ass`);
+    fs.writeFileSync(assPath, assContent);
+
+    console.log(`🎬 5. Final Video Stitching...`);
+    io.emit('status-update', { message: '🎬 Rendering final video...' }); 
+
+    const backgrounds = ['background1.mp4', 'background2.mp4'];
+    const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
+    const backgroundVideoPath = path.join(assetsDir, randomBg);
+    
+    if (!fs.existsSync(backgroundVideoPath)) {
+        throw new Error(`Background video missing at ${backgroundVideoPath}. Please add videos to the 'assets' folder.`);
+    }
+
+    const finalOutputPath = path.join(outputDir, `final_tiktok_${timestamp}.mp4`);
+    const escapedAssPath = assPath.replace(/\\/g, '/').replace(':', '\\:');
+
+    ffmpeg()
+      .input(backgroundVideoPath)
+      .input(audioPath)
+      .videoFilters(`crop=ih*(9/16):ih,subtitles=${escapedAssPath}`) 
+      .outputOptions([
+          '-c:v libx264', 
+          '-preset ultrafast', 
+          '-crf 28',          
+          '-c:a aac', 
+          '-shortest'
+      ])
+      .on('error', (err) => { 
+          console.error(`❌ FFmpeg Error:`, err.message);
+          io.emit('status-update', { message: '❌ Video stitching failed!' });
+      })
+      .on('end', async () => {
+        console.log(`🚀 Video stitched locally: ${finalOutputPath}`);
+        io.emit('status-update', { message: '☁️ Uploading to cloud...' }); 
+
+        try {
+          const uploadResult = await cloudinary.uploader.upload(finalOutputPath, {
+            resource_type: "video",
+            folder: "makeshort_viral" 
+          });
+
+          if (userId) {
+            const { error: dbError } = await supabase
+              .from('videos')
+              .insert([{
+                  user_id: userId,
+                  video_url: uploadResult.secure_url,
+                  title: script.substring(0, 50) + "...", 
+                  type: 'text'
+              }]);
+          }
+
+          // 🟢 EMIT FINISHED VIDEO DIRECTLY TO THE FRONTEND SOCKET
+          io.emit('video-done', { 
+            success: true, 
+            message: 'Video complete!', 
+            videoUrl: uploadResult.secure_url 
+          });
+
+          if (fs.existsSync(finalOutputPath)) fs.unlinkSync(finalOutputPath);
+          if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
+          if (fs.existsSync(assPath)) fs.unlinkSync(assPath);
+
+        } catch (uploadError) {
+          console.error('❌ Cloudinary/DB Error:', uploadError);
+          io.emit('status-update', { message: '❌ Failed to save video to cloud.' });
+        }
+      })
+      .save(finalOutputPath);
+
+  } catch (error) {
+    console.error('❌ Error Pipeline:', error.message);
+    io.emit('status-update', { message: `❌ Error: ${error.message}` });
+  }
+}
+
+// ==========================================
 // HELPER FUNCTIONS
 // ==========================================
 function runCommand(cmd) {
