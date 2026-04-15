@@ -83,7 +83,7 @@ function App() {
         // We DO NOT change the step to 'editing' here.
         // The socket listener 'video-done' will handle moving us to step 'done' when the backend is finished.
       }
-      
+
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || "Error processing. Check console.");
@@ -373,10 +373,9 @@ function App() {
                             High Potential
                           </span>
                         </div>
-                        <p className="text-gray-400 text-sm mb-6 h-24 overflow-hidden relative italic">
-                          "{clip.transcript || clip.text || 'No transcript generated...'}"
-                          <span className="absolute bottom-0 left-0 w-full h-12 bg-gradient-to-t from-gray-900 to-transparent"></span>
-                        </p>
+                        <p className="italic text-gray-400 text-sm mb-4">
+    "{clip.description || clip.title || clip.text || 'No description available.'}"
+</p>
                       </div>
                       
                       <div className="flex gap-3 mt-auto">
@@ -455,6 +454,28 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* Inside your Video Ready component */}
+<div className="flex flex-col items-center">
+    
+    {/* Your existing video player */}
+    <video src={finalVideoUrl} controls className="w-64 rounded-xl border border-gray-700" />
+
+    {/* 🟢 ADD THIS NEW SECTION: The Caption & Hashtag Box */}
+    {selectedClip && (
+        <div className="mt-4 w-64 bg-gray-800 p-4 rounded-lg text-sm text-gray-300">
+            <p className="font-semibold text-white mb-1">Post Caption:</p>
+            <p className="mb-2">{selectedClip.caption}</p>
+            <p className="text-blue-400">{selectedClip.hashtags}</p>
+        </div>
+    )}
+
+    {/* Your existing buttons */}
+    <div className="flex gap-4 mt-4">
+        <button className="bg-gray-700...">Start Over</button>
+        <button className="bg-green-500...">Download</button>
+    </div>
+</div>
           
         </SignedIn>
       </div>
