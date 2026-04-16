@@ -16,7 +16,7 @@ function App() {
   const [step, setStep] = useState('idle'); 
   const [clips, setClips] = useState([]);
   const [activeClipIndex, setActiveClipIndex] = useState(0);
-  const [selectedClip, setSelectedClip] = useState(null); // 🟢 Added this state so the app doesn't crash!
+  const [selectedClip, setSelectedClip] = useState(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState('');
   const [aspectRatio, setAspectRatio] = useState('9:16');
   const [processingMode, setProcessingMode] = useState('shorts'); 
@@ -35,7 +35,6 @@ function App() {
     socket.on('render-progress', (data) => setRenderProgress(data.percent));
     socket.on('status-update', (data) => setStatusMessage(data.message));
 
-    // 🟢 Listen for the final video from the backend
     socket.on('video-done', (data) => {
       console.log("🎉 Video received via socket!", data);
       setFinalVideoUrl(data.videoUrl || data.url);
@@ -103,7 +102,7 @@ function App() {
   };
 
   const handleRender = async (editedClip) => { 
-    setSelectedClip(editedClip); // 🟢 Save the clip to state so we can display its caption later
+    setSelectedClip(editedClip); 
     setStep('processing');
     setStatusMessage('Rendering final video with AI Captions... 🎬');
     try {
@@ -138,75 +137,102 @@ function App() {
   return (
     <div ref={mainContainerRef} className="min-h-screen bg-gray-950 text-white font-sans selection:bg-blue-500 selection:text-white relative">
       
-      <div className="absolute top-6 right-6 z-50">
-        <SignedIn>
-          <UserButton afterSignOutUrl="/" />
-        </SignedIn>
-      </div>
+      {/* 🔒 LOGGED OUT STATE: The New Split-Screen Mobile-Optimized Login */}
+      <SignedOut>
+        <div className="flex min-h-screen w-full">
+          {/* 🌟 LEFT SIDE: App Preview (Hidden on Mobile) */}
+          <div className="hidden lg:flex lg:w-1/2 bg-gray-900 relative items-center justify-center border-r border-gray-800 p-8 flex-col overflow-hidden">
+            {/* Background Glows */}
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
 
-      <div className="max-w-5xl mx-auto px-6 py-12">
-        
-        {/* 🔒 LOGGED OUT STATE */}
-        <SignedOut>
-          <div className="text-center max-w-3xl mx-auto mb-12 mt-8 animate-fade-in">
-            <div className="inline-block px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-sm mb-6">
-              🚀 MakeShort v2.0 is Live
-            </div>
-            <h1 className="text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-emerald-400 to-cyan-400 mb-6 leading-tight">
-              Turn any long video or text into viral Shorts.
-            </h1>
-            <p className="text-xl text-gray-400 mb-8 font-medium">
-              The AI-powered engine for Faceless Channels. <br className="hidden md:block"/>
-              <span className="text-gray-300">YouTube → Shorts | Reddit → TikTok | Blog → Reels</span>
-            </p>
-            
-            <div className="flex flex-col md:flex-row justify-center items-center gap-12 mt-12">
-              <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm transform -rotate-2 hover:rotate-0 transition duration-300">
-                <SignIn routing="hash" />
+            <div className="relative z-20 text-center max-w-lg">
+              <div className="inline-block px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-sm mb-6">
+                🚀 MakeShort v2.0 is Live
               </div>
+              <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-emerald-400 to-cyan-400 leading-tight">
+                Turn long videos into viral Shorts in 1-Click.
+              </h2>
+              <p className="text-gray-400 mb-10 text-lg">
+                The AI-powered engine for Faceless Channels. Join thousands of creators automating their content.
+              </p>
               
-              <div className="hidden md:flex flex-col items-center">
-                <div className="w-48 h-[340px] bg-black border-4 border-gray-800 rounded-2xl relative overflow-hidden shadow-2xl shadow-emerald-500/20">
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent z-10"></div>
-                  <div className="absolute bottom-4 left-0 w-full text-center z-20 px-2">
-                     <p className="text-white font-bold text-sm bg-black/60 inline-block px-2 py-1 rounded">"AITAH for leaving..."</p>
-                  </div>
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-5xl">🎮</div>
+              {/* Phone Mockup for Video Preview */}
+              <div className="w-[260px] h-[520px] bg-black rounded-[2.5rem] border-[8px] border-gray-800 shadow-2xl overflow-hidden mx-auto relative shadow-emerald-500/20">
+                {/* Notch */}
+                <div className="absolute top-0 inset-x-0 h-6 bg-gray-800 rounded-b-3xl w-1/2 mx-auto z-30"></div>
+                
+                {/* 🟢 Drop your best generated video here! */}
+                <video 
+                  src="/assets/preview-clip.mp4" 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                  className="w-full h-full object-cover z-10 relative opacity-80"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent z-20"></div>
+                <div className="absolute bottom-6 left-0 w-full text-center z-30 px-2">
+                    <p className="text-white font-bold text-sm bg-black/60 inline-block px-3 py-1 rounded-lg backdrop-blur-sm">"AITAH for leaving..."</p>
                 </div>
-                <p className="text-gray-500 mt-4 text-sm font-semibold uppercase tracking-widest">Live Preview</p>
               </div>
             </div>
           </div>
-        </SignedOut>
 
-        {/* 🔓 LOGGED IN STATE */}
-        <SignedIn>
-          <header className="text-center mb-12">
-            <h1 className="text-4xl font-extrabold text-white">Dashboard</h1>
-            <p className="text-gray-400 mt-2">What are we turning viral today?</p>
+          {/* 🔐 RIGHT SIDE: Clerk Login Form */}
+          <div className="flex w-full lg:w-1/2 flex-col justify-center items-center p-4 sm:p-12 relative z-10">
+            {/* Show simple header on mobile only, since left side is hidden */}
+            <div className="lg:hidden text-center mb-8">
+              <div className="inline-block px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-xs mb-4">
+                🚀 MakeShort v2.0
+              </div>
+              <h1 className="text-3xl font-black text-white mb-2">Welcome Back</h1>
+              <p className="text-gray-400 text-sm">Sign in to start creating viral content.</p>
+            </div>
+
+            <div className="w-full max-w-md flex justify-center transform transition duration-300 hover:scale-[1.01]">
+              <SignIn routing="hash" />
+            </div>
+          </div>
+        </div>
+      </SignedOut>
+
+      {/* 🔓 LOGGED IN STATE: The Mobile-Optimized Dashboard */}
+      <SignedIn>
+        {/* User Button fixed to top right */}
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
+          <UserButton afterSignOutUrl="/" />
+        </div>
+
+        {/* Adjusted padding for mobile (px-4 py-8) */}
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12 mt-12 sm:mt-0">
+          
+          <header className="text-center mb-8 sm:mb-12">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-white">Dashboard</h1>
+            <p className="text-sm sm:text-base text-gray-400 mt-2">What are we turning viral today?</p>
           </header>
 
           {/* State 1: Idle Input */}
           {step === 'idle' && (
-            <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl">
+            <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-5 sm:p-8 rounded-2xl border border-gray-800 shadow-xl">
               
-              {/* Input Type Tabs */}
-              <div className="flex p-1 bg-gray-950 rounded-xl mb-6 border border-gray-800">
+              {/* Input Type Tabs - Now wrap nicely on mobile */}
+              <div className="flex flex-col sm:flex-row p-1 bg-gray-950 rounded-xl mb-6 border border-gray-800 gap-1 sm:gap-0">
                 <button 
                   onClick={() => setInputType('reddit')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${inputType === 'reddit' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                  className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'reddit' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
                 >
                   🔥 Reddit Link
                 </button>
                 <button 
                   onClick={() => setInputType('text')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${inputType === 'text' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                  className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'text' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
                 >
                   ✍️ Text Script
                 </button>
                 <button 
                   onClick={() => setInputType('video')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${inputType === 'video' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                  className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'video' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
                 >
                   🎬 Video Upload
                 </button>
@@ -222,7 +248,7 @@ function App() {
                       placeholder="https://www.reddit.com/r/AITAH/comments/..."
                       value={redditUrl}
                       onChange={(e) => setRedditUrl(e.target.value)}
-                      className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white focus:outline-none focus:border-blue-500 transition"
+                      className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 sm:p-4 text-sm sm:text-base text-white focus:outline-none focus:border-blue-500 transition"
                     />
                   </div>
                 )}
@@ -235,7 +261,7 @@ function App() {
                       placeholder="Once upon a time..."
                       value={scriptText}
                       onChange={(e) => setScriptText(e.target.value)}
-                      className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white focus:outline-none focus:border-blue-500 transition resize-none custom-scrollbar"
+                      className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 sm:p-4 text-sm sm:text-base text-white focus:outline-none focus:border-blue-500 transition resize-none custom-scrollbar"
                     />
                   </div>
                 )}
@@ -247,19 +273,19 @@ function App() {
                       type="file"
                       accept="video/mp4,video/quicktime,video/*"
                       onChange={(e) => setVideoFile(e.target.files[0])}
-                      className="block w-full text-sm text-gray-400 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-gray-800 file:text-white hover:file:bg-gray-700 file:cursor-pointer bg-gray-950 border border-gray-700 rounded-xl p-2 cursor-pointer focus:outline-none focus:border-blue-500 transition"
+                      className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 sm:file:py-3 sm:file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-gray-800 file:text-white hover:file:bg-gray-700 file:cursor-pointer bg-gray-950 border border-gray-700 rounded-xl p-2 cursor-pointer focus:outline-none focus:border-blue-500 transition"
                     />
                   </div>
                 )}
               </div>
 
-              {/* Format Options */}
+              {/* Format Options - Stack on mobile */}
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2 mt-2">Choose Format</label>
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <button 
                     onClick={() => setAspectRatio('9:16')}
-                    className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm sm:text-base transition-all border ${
                       aspectRatio === '9:16' 
                         ? 'bg-emerald-600 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]' 
                         : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
@@ -269,7 +295,7 @@ function App() {
                   </button>
                   <button 
                     onClick={() => setAspectRatio('16:9')}
-                    className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                    className={`flex-1 py-3 rounded-xl font-bold text-sm sm:text-base transition-all border ${
                       aspectRatio === '16:9' 
                         ? 'bg-blue-600 border-blue-500 text-white shadow-[0_0_15px_rgba(37,99,235,0.3)]' 
                         : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
@@ -280,14 +306,14 @@ function App() {
                 </div>
               </div>
 
-              {/* Goal Options */}
+              {/* Goal Options - Stack on mobile */}
               {inputType === 'video' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-2 mt-4">Choose Goal</label>
-                  <div className="flex gap-4">
+                  <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <button 
                       onClick={() => setProcessingMode('shorts')}
-                      className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                      className={`flex-1 py-3 rounded-xl font-bold text-sm sm:text-base transition-all border ${
                         processingMode === 'shorts' 
                           ? 'bg-purple-600 border-purple-500 text-white shadow-[0_0_15px_rgba(147,51,234,0.3)]' 
                           : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
@@ -297,7 +323,7 @@ function App() {
                     </button>
                     <button 
                       onClick={() => setProcessingMode('full')}
-                      className={`flex-1 py-3 rounded-xl font-bold transition-all border ${
+                      className={`flex-1 py-3 rounded-xl font-bold text-sm sm:text-base transition-all border ${
                         processingMode === 'full' 
                           ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]' 
                           : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
@@ -313,7 +339,7 @@ function App() {
               <div className="pt-4 border-t border-gray-800 mt-6">
                 <button 
                   onClick={inputType === 'video' && processingMode === 'full' ? handleFullVideo : handleGenerate}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-emerald-600/20"
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-base sm:text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-emerald-600/20"
                 >
                   Generate Viral Video 🚀
                 </button>
@@ -324,9 +350,9 @@ function App() {
 
           {/* State 2: Processing */}
           {step === 'processing' && (
-            <div className="text-center py-20 animate-fade-in">
-              <div className="w-24 h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-              <h2 className="text-3xl font-bold text-white mb-4">{statusMessage}</h2>
+            <div className="text-center py-20 animate-fade-in px-4">
+              <div className="w-16 h-16 sm:w-24 sm:h-24 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">{statusMessage}</h2>
               
               {renderProgress > 0 && (
                 <div className="max-w-md mx-auto w-full bg-gray-800 rounded-full h-4 mt-6 overflow-hidden border border-gray-700">
@@ -342,9 +368,9 @@ function App() {
           {/* State 3: Clip Selection */}
           {step === 'editing' && (
             <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-3xl font-extrabold text-white">✂️ Choose Your Viral Clip</h2>
-                <button onClick={handleStartOver} className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-bold transition">
+              <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-white text-center sm:text-left">✂️ Choose Your Viral Clip</h2>
+                <button onClick={handleStartOver} className="w-full sm:w-auto px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-bold transition">
                   Start Over
                 </button>
               </div>
@@ -354,34 +380,34 @@ function App() {
                     <p className="text-gray-400">No clips found. Try uploading a different video.</p>
                  </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {clips.map((clip, idx) => (
-                    <div key={idx} className="bg-gray-900 border border-gray-800 p-6 rounded-xl hover:border-emerald-500 transition shadow-xl flex flex-col justify-between">
+                    <div key={idx} className="bg-gray-900 border border-gray-800 p-5 sm:p-6 rounded-xl hover:border-emerald-500 transition shadow-xl flex flex-col justify-between">
                       <div>
                         <div className="flex justify-between items-start mb-4">
-                          <h3 className="text-xl font-bold text-white">Clip {idx + 1}</h3>
-                          <span className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/30">
+                          <h3 className="text-lg sm:text-xl font-bold text-white">Clip {idx + 1}</h3>
+                          <span className="bg-emerald-500/20 text-emerald-400 px-2 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold border border-emerald-500/30">
                             High Potential
                           </span>
                         </div>
-                       <p className="italic text-gray-400 text-sm mb-4">
+                       <p className="italic text-gray-400 text-xs sm:text-sm mb-4 line-clamp-3">
                         "{clip.description || clip.summary || clip.title || clip.hook || clip.text || 'No description available.'}"
                        </p>
                       </div>
                       
-                      <div className="flex gap-3 mt-auto">
+                      <div className="flex flex-col xl:flex-row gap-2 xl:gap-3 mt-auto">
                         <button
                           onClick={() => {
                             setActiveClipIndex(idx);
                             setStep('editor'); 
                           }}
-                          className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-bold text-sm transition"
+                          className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-bold text-xs sm:text-sm transition"
                         >
                           ✏️ Edit text
                         </button>
                         <button
                           onClick={() => handleRender(clip)}
-                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-sm transition"
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs sm:text-sm transition"
                         >
                           🚀 Render
                         </button>
@@ -395,10 +421,10 @@ function App() {
 
           {/* State 4: Subtitle Editor Wrapper */}
           {step === 'editor' && (
-            <div className="max-w-4xl mx-auto bg-gray-900 p-6 rounded-xl border border-gray-800 animate-fade-in">
+            <div className="max-w-4xl mx-auto bg-gray-900 p-4 sm:p-6 rounded-xl border border-gray-800 animate-fade-in">
               <button 
                 onClick={() => setStep('editing')} 
-                className="text-gray-400 hover:text-white mb-6 flex items-center gap-2 font-bold"
+                className="text-gray-400 hover:text-white mb-6 flex items-center gap-2 font-bold text-sm sm:text-base"
               >
                 ← Back to Clips
               </button>
@@ -411,43 +437,42 @@ function App() {
 
           {/* State 5: Finished Video */}
           {step === 'done' && (
-            <div className="max-w-xl mx-auto bg-gray-900 p-8 rounded-2xl border border-gray-800 shadow-xl text-center animate-fade-in">
-              <h2 className="text-3xl font-extrabold text-white mb-2">🎉 Video Ready!</h2>
-              <p className="text-gray-400 mb-6">Your viral short is cooked. Download it before it expires in 10 mins.</p>
+            <div className="max-w-xl mx-auto bg-gray-900 p-5 sm:p-8 rounded-2xl border border-gray-800 shadow-xl text-center animate-fade-in">
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-2">🎉 Video Ready!</h2>
+              <p className="text-sm sm:text-base text-gray-400 mb-6">Your viral short is cooked. Download it before it expires in 10 mins.</p>
               
-              <div className="relative w-64 mx-auto rounded-xl overflow-hidden shadow-2xl shadow-emerald-500/20 border-4 border-gray-800 mb-8">
+              <div className="relative w-48 sm:w-64 mx-auto rounded-xl overflow-hidden shadow-2xl shadow-emerald-500/20 border-4 border-gray-800 mb-8">
                 <video 
                   src={finalVideoUrl} 
                   controls 
                   autoPlay 
                   loop 
+                  playsInline
                   className="w-full h-auto"
                 />
               </div>
 
-              {/* 🟢 FIXED: Using the actual backend variable names! */}
-{selectedClip && selectedClip.socialCaption && (
-  <div className="w-full bg-gray-950 p-4 rounded-xl border border-gray-800 text-left mb-8 shadow-inner">
-    <p className="font-bold text-white mb-2 flex items-center gap-2">📝 AI Suggested Post:</p>
-    
-    <p className="text-sm text-gray-300 mb-3 leading-relaxed">
-      {selectedClip.socialCaption}
-    </p>
+              {selectedClip && selectedClip.socialCaption && (
+                <div className="w-full bg-gray-950 p-4 rounded-xl border border-gray-800 text-left mb-8 shadow-inner">
+                  <p className="font-bold text-white mb-2 flex items-center gap-2 text-sm sm:text-base">📝 AI Suggested Post:</p>
+                  
+                  <p className="text-xs sm:text-sm text-gray-300 mb-3 leading-relaxed">
+                    {selectedClip.socialCaption}
+                  </p>
 
-    {/* Optional: You can also show the 'reason' your AI picked this clip! */}
-    {selectedClip.reason && (
-      <div className="mt-3 pt-3 border-t border-gray-800">
-        <p className="text-xs font-bold text-blue-400">🧠 Why this is viral:</p>
-        <p className="text-xs text-gray-400 mt-1 italic">{selectedClip.reason}</p>
-      </div>
-    )}
-  </div>
-)} 
+                  {selectedClip.reason && (
+                    <div className="mt-3 pt-3 border-t border-gray-800">
+                      <p className="text-[10px] sm:text-xs font-bold text-blue-400">🧠 Why this is viral:</p>
+                      <p className="text-[10px] sm:text-xs text-gray-400 mt-1 italic">{selectedClip.reason}</p>
+                    </div>
+                  )}
+                </div>
+              )} 
 
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <button 
                   onClick={handleStartOver}
-                  className="flex-1 py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-bold text-lg transition-all"
+                  className="w-full sm:flex-1 py-3 sm:py-4 bg-gray-800 hover:bg-gray-700 rounded-xl font-bold text-base sm:text-lg transition-all"
                 >
                   Start Over
                 </button>
@@ -457,7 +482,7 @@ function App() {
                   download="MakeShort_Viral.mp4"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-lg transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
+                  className="w-full sm:flex-1 py-3 sm:py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-base sm:text-lg transition-all shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
                 >
                   ⬇️ Download
                 </a>
@@ -465,8 +490,8 @@ function App() {
             </div>
           )}
 
-        </SignedIn>
-      </div>
+        </div>
+      </SignedIn>
     </div>
   );
 }
