@@ -223,6 +223,17 @@ function App() {
           <UserButton afterSignOutUrl="/" />
         </div>
 
+<div className="bg-amber-500/10 border border-amber-500/30 text-amber-200 p-4 rounded-xl mb-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+  <span className="text-3xl">⚠️</span>
+  <div className="text-sm">
+    <h4 className="font-bold text-amber-400 text-base mb-1">Beta Testing Mode</h4>
+    <p>
+      We are currently running on testing servers. <strong>Renders might take a few minutes</strong>, so grab a coffee while the AI works! ☕ <br/>
+      <em>Note: To prevent server timeouts, please keep your input videos <strong>under 10 minutes</strong>.</em>
+    </p>
+  </div>
+</div>
+
         {/* Adjusted padding for mobile (px-4 py-8) */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12 mt-12 sm:mt-0">
           
@@ -236,26 +247,33 @@ function App() {
             <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-5 sm:p-8 rounded-2xl border border-gray-800 shadow-xl">
               
               {/* Input Type Tabs - Now wrap nicely on mobile */}
-              <div className="flex flex-col sm:flex-row p-1 bg-gray-950 rounded-xl mb-6 border border-gray-800 gap-1 sm:gap-0">
-                <button 
-                  onClick={() => setInputType('reddit')}
-                  className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'reddit' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
-                >
-                  🔥 Reddit Link
-                </button>
-                <button 
-                  onClick={() => setInputType('text')}
-                  className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'text' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
-                >
-                  ✍️ Text Script
-                </button>
-                <button 
-                  onClick={() => setInputType('video')}
-                  className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'video' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
-                >
-                  🎬 Video Upload
-                </button>
-              </div>
+<div className="flex flex-col sm:flex-row p-1 bg-gray-950 rounded-xl mb-6 border border-gray-800 gap-1 sm:gap-0">
+  <button 
+    onClick={() => setInputType('reddit')}
+    className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'reddit' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+  >
+    🔥 Reddit Link
+  </button>
+  <button 
+    onClick={() => setInputType('text')}
+    className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'text' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+  >
+    ✍️ Text Script
+  </button>
+  <button 
+    onClick={() => setInputType('video')}
+    className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'video' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
+  >
+    🎬 Video Upload
+  </button>
+</div>
+
+{/* 🟢 DROP IT RIGHT HERE: */}
+{inputType === 'video' && (
+  <p className="text-xs text-gray-400 -mt-4 mb-6 ml-1">
+    💡 Beta limit: Videos must be under 10 minutes long.
+  </p>
+)}
 
               {/* Dynamic Input Area */}
               <div className="min-h-[120px]">
@@ -341,15 +359,15 @@ function App() {
                       ✂️ Find AI Hooks
                     </button>
                     <button 
-                      onClick={() => setProcessingMode('full')}
-                      className={`flex-1 py-3 rounded-xl font-bold text-sm sm:text-base transition-all border ${
-                        processingMode === 'full' 
-                          ? 'bg-orange-600 border-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]' 
-                          : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
-                      }`}
-                    >
-                      🎬 Subtitle Full Video
-                    </button>
+  onClick={(e) => {
+    e.preventDefault();
+    alert("🚀 Full Video Rendering is a massive AI operation and is currently locked for the Beta. Pro tier coming soon!");
+  }}
+  className="flex-1 py-3 bg-gray-800 text-gray-500 rounded-xl cursor-not-allowed flex items-center justify-center gap-2 border border-gray-700 transition-all font-bold text-sm sm:text-base"
+  title="Coming soon in Pro!"
+>
+  <span>🔒</span> Full Video Subtitles <span className="bg-gradient-to-r from-purple-400 to-pink-500 text-transparent bg-clip-text text-xs font-bold ml-1">(PRO)</span>
+</button>
                   </div>
                 </div>
               )}
