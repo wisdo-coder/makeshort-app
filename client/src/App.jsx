@@ -24,24 +24,26 @@ function App() {
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
   const { userId } = useAuth();
 
-  useEffect(() => {
-    const socket = io(API_URL, {
+ useEffect(() => {
+    socketRef.current = io(API_URL, {
         transports: ['websocket', 'polling'],
         autoConnect: true,
         reconnectionAttempts: 5 
     });
     
-    socket.on('connect', () => console.log('✅ Connected to Render WebSocket server!'));
-    socket.on('render-progress', (data) => setRenderProgress(data.percent));
-    socket.on('status-update', (data) => setStatusMessage(data.message));
+    socketRef.current.on('connect', () => {
+      console.log('✅ Connected to Render WebSocket server! ID:', socketRef.current.id);
+    });
+    socketRef.current.on('render-progress', (data) => setRenderProgress(data.percent));
+    socketRef.current.on('status-update', (data) => setStatusMessage(data.message));
 
-    socket.on('video-done', (data) => {
+    socketRef.current.on('video-done', (data) => {
       console.log("🎉 Video received via socket!", data);
       setFinalVideoUrl(data.videoUrl || data.url);
       setStep('done');
     });
 
-    return () => socket.disconnect();
+    return () => socketRef.current.disconnect();
   }, []);
 
   const handleGenerate = async () => {
@@ -51,6 +53,7 @@ function App() {
         if (!videoFile) return alert("Please select a video file!");
         const formData = new FormData();
         formData.append('videoFile', videoFile); 
+        formData.append('socketId', socketRef.current.id);
         
         setStatusMessage('Extracting viral clips... ✂️');
         const { data } = await axios.post(`${API_URL}/api/generate`, formData);
@@ -62,10 +65,11 @@ function App() {
         if (!redditUrl) return alert("Please paste a Reddit link!");
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
-        await axios.post(`${API_URL}/api/generate-reddit`, {
-          redditUrl: redditUrl,
-          userId: userId 
-        });
+       await axios.post(`${API_URL}/api/generate-reddit`, {
+  redditUrl: redditUrl,
+  userId: userId,
+  socketId: socketRef.current.id // 🟢 ADD THIS
+});
 
       } else if (inputType === 'text') {
         if (!scriptText) return alert("Please write a script!");
@@ -107,10 +111,12 @@ function App() {
     setStatusMessage('Rendering final video with AI Captions... 🎬');
     try {
       // 🟢 FIXED: We are now passing the aspectRatio to the backend!
-      await axios.post(`${API_URL}/api/render`, { 
-        clip: editedClip, 
-        aspectRatio: aspectRatio 
-      });
+     await axios.post(`${API_URL}/api/render`, { 
+  clip: editedClip, 
+  aspectRatio: aspectRatio,
+  socketId: socketRef.current.id // 🟢 ADD THIS
+});
+
     } catch (err) {
       console.error(err);
       alert('Failed to start render. Check console.');
@@ -131,6 +137,7 @@ function App() {
 
   const mainContainerRef = useRef(null);
   const videoRef = useRef(null);
+  const socketRef = useRef(null);
   useEffect(() => {
     if (!mainContainerRef.current) return;
     let ctx = gsap.context(() => {
