@@ -130,12 +130,25 @@ function App() {
   };
 
   const mainContainerRef = useRef(null);
+  const videoRef = useRef(null);
   useEffect(() => {
     if (!mainContainerRef.current) return;
     let ctx = gsap.context(() => {
       gsap.from(mainContainerRef.current, { y: 50, opacity: 0, duration: 1, ease: "power3.out" });
     });
     return () => ctx.revert(); 
+  }, []);
+
+  // 2. 🟢 ADD THIS NEW ONE RIGHT BELOW IT:
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.defaultMuted = true;
+      videoRef.current.muted = true;
+      
+      videoRef.current.play().catch(err => {
+        console.error("Autoplay still blocked:", err);
+      });
+    }
   }, []);
 
   return (
@@ -168,11 +181,13 @@ function App() {
                 
                 {/* 🟢 Drop your best generated video here! */}
                 <video 
+  ref={videoRef}
   src="/assets/preview-clip.mp4" 
-  autoPlay={true} 
-  loop={true} 
-  muted={true} 
-  playsInline={true}
+  autoPlay 
+  loop 
+  muted 
+  defaultMuted 
+  playsInline
   className="w-full h-full object-cover z-10 relative opacity-80"
 />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent z-20"></div>
