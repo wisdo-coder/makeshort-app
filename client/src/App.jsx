@@ -168,11 +168,11 @@ function App() {
                 
                 {/* 🟢 Drop your best generated video here! */}
                 <video 
-  src="/assets/preview-clip.mp4" // <--- CHANGE THIS LINE
-  autoPlay 
-  loop 
-  muted 
-  playsInline
+  src="/assets/preview-clip.mp4" 
+  autoPlay={true} 
+  loop={true} 
+  muted={true} 
+  playsInline={true}
   className="w-full h-full object-cover z-10 relative opacity-80"
 />
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent z-20"></div>
