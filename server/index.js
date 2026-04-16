@@ -134,21 +134,24 @@ app.post('/api/cleanup', (req, res) => {
 app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No video file was uploaded." });
 
+    const socketId = req.body.socketId; // 🟢 GRAB THE ID
     const inputPath = req.file.path;
     const videoId = path.parse(req.file.filename).name; 
     const audioPath = path.join(uploadsDir, `${videoId}.mp3`);
 
     try {
         console.log(`[1/5] Received local video upload: ${req.file.originalname}`);
-        io.emit('status-update', { message: '📥 Video securely uploaded! Starting processing...' });
+        io.to(socketId).emit('status-update', { message: '📥 Video securely uploaded! Starting processing...' }); // 🟢 WHISPER IT
 
         console.log(`[2/5] Extracting audio with FFmpeg...`);
-        io.emit('status-update', { message: '🎵 Extracting audio track...' });
+        io.to(socketId).emit('status-update', { message: '🎵 Extracting audio track...' }); // 🟢 WHISPER IT
+        
+// ... (continue down the route, changing EVERY io.emit to io.to(socketId).emit) ...
         
         await runCommand(`ffmpeg -i "${inputPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
         console.log(`[3/5] Transcribing with Whisper...`);
-        io.emit('status-update', { message: '🗣️ AI is listening to the video...' });
+       io.to(socketId).emit('status-update', { message: '🗣️ AI is listening to the video...' });
         
         const stats = fs.statSync(audioPath);
         if (stats.size === 0) throw new Error("Extracted audio is 0 bytes. Video might not have sound.");
@@ -172,7 +175,7 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
         }
 
         console.log(`[4/5] AI Analysis with Gemini...`);
-        io.emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
+       io.to(socketId).emit('status-update', { message: '🧠 Gemini is finding the viral hooks...' });
         
         const highlights = await getHighlightsFromAI(transcription.text);
 
@@ -223,31 +226,33 @@ app.post('/api/generate', upload.single('videoFile'), async (req, res) => {
 
 
 // ==========================================
-// ROUTE 2: RENDERING (FFmpeg & Subtitles) - 🟢 FIXED (ASYNC)
+// ROUTE 2: RENDERING (FFmpeg & Subtitles)
 // ==========================================
 app.post('/api/render', (req, res) => {
-    const { clip, aspectRatio } = req.body; 
+    const { clip, aspectRatio, socketId } = req.body; // 🟢 GRAB socketId
     
-    // 🟢 INSTANT RESPONSE: Prevents Render 100s timeout
     res.status(202).json({ message: "Render started in background..." });
 
-    // Run in background without awaiting
-    processRenderInBackground(clip, aspectRatio).catch(err => console.error("Background Render Error:", err));
+    // 🟢 PASS socketId into the background function
+    processRenderInBackground(clip, aspectRatio, socketId).catch(err => console.error("Background Render Error:", err));
 });
 
-async function processRenderInBackground(clip, aspectRatio) {
+// 🟢 ACCEPT socketId as the third parameter
+async function processRenderInBackground(clip, aspectRatio, socketId) {
     const subtitlePath = path.join(uploadsDir, `${clip.id}.ass`);
     const outputPath = path.join(outputDir, `${clip.id}-final.mp4`);
 
     try {
-        io.emit('status-update', { message: '🎬 Initializing render engine...' });
+        io.to(socketId).emit('status-update', { message: '🎬 Initializing render engine...' }); // 🟢 WHISPER IT
+        
+// ... (continue down the function, changing EVERY io.emit to io.to(socketId).emit) ...
         const assContent = generateASS(clip.segments || [], clip.start, aspectRatio);
         fs.writeFileSync(subtitlePath, assContent);
         
         // 1. Wait for FFmpeg to finish rendering locally on Render
         await runFFmpegRender(clip.sourcePath, subtitlePath, outputPath, clip.start, clip.duration, aspectRatio);
         
-        io.emit('status-update', { message: '☁️ Uploading to cloud...' });
+      io.to(socketId).emit('status-update', { message: '☁️ Uploading to cloud...' });
 
         // 2. 🟢 Upload the local video to Cloudinary
         const uploadResult = await cloudinary.uploader.upload(outputPath, {
@@ -256,12 +261,12 @@ async function processRenderInBackground(clip, aspectRatio) {
         });
         
         // 3. 🟢 Emit the final Cloudinary URL back to Vercel
-        io.emit('video-done', { 
+       io.to(socketId).emit('video-done', { 
             success: true, 
             url: uploadResult.secure_url 
         });
         
-        io.emit('status-update', { message: '✅ Video perfectly rendered and uploaded!' });
+      io.to(socketId).emit('status-update', { message: '✅ Video perfectly rendered and uploaded!' });
 
         // 4. 🧹 Clean up the local files so Render doesn't run out of storage space
         if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
@@ -269,7 +274,7 @@ async function processRenderInBackground(clip, aspectRatio) {
 
     } catch (error) {
         console.error("Render/Upload failed:", error);
-        io.emit('status-update', { message: '❌ Rendering or upload failed' });
+       io.to(socketId).emit('status-update', { message: '❌ Rendering or upload failed' });
     }
 }
 
@@ -291,14 +296,17 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
     try {
         if (!req.file) return res.status(400).json({ error: "No video file was uploaded." });
 
+        const socketId = req.body.socketId; // 🟢 GRAB THE ID
         const videoPath = req.file.path;
         const fileId = path.parse(req.file.filename).name;
         const audioPath = path.join(uploadsDir, `${fileId}.mp3`);
 
-        io.emit('status-update', { message: '🎵 Extracting audio track...' });
+        io.to(socketId).emit('status-update', { message: '🎵 Extracting audio track...' }); // 🟢 WHISPER IT
+        
+// ... (continue down the route, changing EVERY io.emit to io.to(socketId).emit) ...
         await runCommand(`ffmpeg -i "${videoPath}" -vn -ac 1 -ar 16000 -b:a 32k "${audioPath}"`);
 
-        io.emit('status-update', { message: '🗣️ AI is transcribing the full video...' });
+       io.to(socketId).emit('status-update', { message: ' AI is transcribing the full video...' });
         
         let transcription = null;
         let groqRetries = 3;
@@ -321,7 +329,7 @@ app.post('/api/transcribe-only', upload.single('videoFile'), async (req, res) =>
 // 🟢 FIXED: Using "transcription" instead of "transcript", and checking the ".text" property
 if (!transcription || !transcription.text || transcription.text.trim() === "") {
     console.log("❌ Transcription failed entirely. Aborting.");
-    io.emit('status-update', { message: '❌ Failed to transcribe audio. Please try again.' });
+  io.to(socketId).emit('status-update', { message: '❌ Failed to transcribe audio. Please try again.' });
     return; 
 }
 
@@ -366,23 +374,25 @@ if (!transcription || !transcription.text || transcription.text.trim() === "") {
 
 
 // ==========================================
-// ROUTE 5: REDDIT SCRAPER - 🟢 FIXED (ASYNC)
+// ROUTE 5: REDDIT SCRAPER
 // ==========================================
 app.post('/api/generate-reddit', (req, res) => {
-  const { redditUrl, userId } = req.body; 
+  const { redditUrl, userId, socketId } = req.body; // 🟢 GRAB socketId
   if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
 
-  // 🟢 INSTANT RESPONSE: Prevents Render 100s timeout
   res.status(202).json({ message: "Job accepted. Cooking video in background..." });
 
-  // Run in background without awaiting
-  processRedditInBackground(redditUrl, userId).catch(err => console.error("Background Reddit Error:", err));
+  // 🟢 PASS socketId
+  processRedditInBackground(redditUrl, userId, socketId).catch(err => console.error("Background Reddit Error:", err));
 });
 
-async function processRedditInBackground(redditUrl, userId) {
+// 🟢 ACCEPT socketId
+async function processRedditInBackground(redditUrl, userId, socketId) {
   try {
     console.log(`🕵️‍♂️ 1. Scraping Reddit: ${redditUrl}`);
-    io.emit('status-update', { message: '🕵️‍♂️ Reading Reddit story...' }); 
+    io.to(socketId).emit('status-update', { message: '🕵️‍♂️ Reading Reddit story...' }); // 🟢 WHISPER IT
+    
+// ... (continue down the function, changing EVERY io.emit to io.to(socketId).emit) ...
 
     let cleanUrl = redditUrl.split('?')[0]; 
     if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
@@ -398,7 +408,7 @@ async function processRedditInBackground(redditUrl, userId) {
     const fullScript = `${postData.title}... ${story}`.substring(0, 1000); 
 
     console.log(`🎙️ 2. Generating Deepgram AI Voice...`);
-    io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); 
+   io.to(socketId).emit('status-update', { message: '🎙️ Generating AI Voice...' }); 
 
     let voiceResponse;
     try {
@@ -427,7 +437,7 @@ async function processRedditInBackground(redditUrl, userId) {
     fs.writeFileSync(audioPath, Buffer.from(voiceResponse.data));
 
     console.log(`🧠 3. Analyzing audio with Deepgram...`);
-    io.emit('status-update', { message: '🧠 Transcribing voice audio...' }); 
+   io.to(socketId).emit('status-update', { message: '🧠 Transcribing voice audio...' }); 
     
     const audioBuffer = fs.readFileSync(audioPath);
     const deepgramResponse = await axios({
@@ -443,7 +453,7 @@ async function processRedditInBackground(redditUrl, userId) {
     const wordsArray = deepgramResponse.data.results.channels[0].alternatives[0].words;
 
     console.log(`✍️ 4. Generating Subtitle File...`);
-    io.emit('status-update', { message: '✍️ Writing subtitles...' }); 
+   io.to(socketId).emit('status-update', { message: '✍️ Writing subtitles...' }); 
 
     let chunks = [];
     for (let i = 0; i < wordsArray.length; i += 3) {
@@ -475,7 +485,7 @@ Format: Layer, Start, End, Style, Text\n`;
     fs.writeFileSync(assPath, assContent);
 
     console.log(`🎬 5. Final Video Stitching...`);
-    io.emit('status-update', { message: '🎬 Rendering final video...' }); 
+   io.to(socketId).emit('status-update', { message: '🎬 Rendering final video...' }); 
 
     const backgrounds = ['background1.mp4', 'background2.mp4'];
     const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
@@ -516,11 +526,11 @@ Format: Layer, Start, End, Style, Text\n`;
       })
       .on('error', (err) => { 
           console.error(`❌ FFmpeg Error:`, err.message);
-          io.emit('status-update', { message: '❌ Video stitching failed!' });
+         io.to(socketId).emit('status-update', { message: '❌ Video stitching failed!' });
       })
       .on('end', async () => {
         console.log(`🚀 Video stitched locally: ${finalOutputPath}`);
-        io.emit('status-update', { message: '☁️ Uploading to cloud...' }); 
+       io.to(socketId).emit('status-update', { message: '☁️ Uploading to cloud...' }); 
 
         try {
           const uploadResult = await cloudinary.uploader.upload(finalOutputPath, {
@@ -540,7 +550,7 @@ const { error: dbError } = await supabase
   }]);
           }
 
-          io.emit('video-done', { 
+        io.to(socketId).emit('video-done', { 
             success: true, 
             message: 'Video complete!', 
             videoUrl: uploadResult.secure_url 
@@ -552,41 +562,43 @@ const { error: dbError } = await supabase
 
         } catch (uploadError) {
           console.error('❌ Cloudinary/DB Error:', uploadError);
-          io.emit('status-update', { message: '❌ Failed to save video to cloud.' });
+         io.to(socketId).emit('status-update', { message: '❌ Failed to save video to cloud.' });
         }
       })
       .save(finalOutputPath);
 
   } catch (error) {
     console.error('❌ Error Pipeline:', error.message);
-    io.emit('status-update', { message: `❌ Error: ${error.message}` });
+   io.to(socketId).emit('status-update', { message: `❌ Error: ${error.message}` });
   }
 }
 
-// ==========================================
+/// ==========================================
 // ROUTE 6: TEXT SCRIPT TO VIDEO
 // ==========================================
 app.post('/api/generate-text', (req, res) => {
-  const { script, userId } = req.body; 
+  const { script, userId, socketId } = req.body; // 🟢 GRAB socketId
   if (!script) return res.status(400).json({ error: 'Missing script text' });
 
-  // 🟢 INSTANT RESPONSE: Prevents Render 100s timeout
   res.status(202).json({ message: "Job accepted. Cooking video in background..." });
 
-  // Run in background without awaiting
-  processTextInBackground(script, userId).catch(err => console.error("Background Text Error:", err));
+  // 🟢 PASS socketId
+  processTextInBackground(script, userId, socketId).catch(err => console.error("Background Text Error:", err));
 });
 
-async function processTextInBackground(script, userId) {
+// 🟢 ACCEPT socketId
+async function processTextInBackground(script, userId, socketId) {
   try {
     console.log(`📝 1. Received Custom Script: ${script.substring(0, 30)}...`);
-    io.emit('status-update', { message: '📝 Reading your script...' }); 
+    io.to(socketId).emit('status-update', { message: '📝 Reading your script...' }); // 🟢 WHISPER IT
+    
+// ... (continue down the function, changing EVERY io.emit to io.to(socketId).emit) ...
 
     // Limit to 1000 chars to avoid massive API bills, just like Reddit
     const fullScript = script.substring(0, 1000); 
 
     console.log(`🎙️ 2. Generating Deepgram AI Voice...`);
-    io.emit('status-update', { message: '🎙️ Generating AI Voice...' }); 
+   io.to(socketId).emit('status-update', { message: '🎙️ Generating AI Voice...' }); 
 
     let voiceResponse;
     try {
@@ -615,7 +627,7 @@ async function processTextInBackground(script, userId) {
     fs.writeFileSync(audioPath, Buffer.from(voiceResponse.data));
 
     console.log(`🧠 3. Analyzing audio with Deepgram...`);
-    io.emit('status-update', { message: '🧠 Transcribing voice audio...' }); 
+  io.to(socketId).emit('status-update', { message: '🧠 Transcribing voice audio...' }); 
     
     const audioBuffer = fs.readFileSync(audioPath);
     const deepgramResponse = await axios({
@@ -631,7 +643,7 @@ async function processTextInBackground(script, userId) {
     const wordsArray = deepgramResponse.data.results.channels[0].alternatives[0].words;
 
     console.log(`✍️ 4. Generating Subtitle File...`);
-    io.emit('status-update', { message: '✍️ Writing subtitles...' }); 
+   io.to(socketId).emit('status-update', { message: '✍️ Writing subtitles...' }); 
 
     let chunks = [];
     for (let i = 0; i < wordsArray.length; i += 3) {
@@ -663,7 +675,7 @@ Format: Layer, Start, End, Style, Text\n`;
     fs.writeFileSync(assPath, assContent);
 
     console.log(`🎬 5. Final Video Stitching...`);
-    io.emit('status-update', { message: '🎬 Rendering final video...' }); 
+   io.to(socketId).emit('status-update', { message: '🎬 Rendering final video...' }); 
 
     const backgrounds = ['background1.mp4', 'background2.mp4'];
     const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
@@ -704,11 +716,11 @@ Format: Layer, Start, End, Style, Text\n`;
       })
       .on('error', (err) => { 
           console.error(`❌ FFmpeg Error:`, err.message);
-          io.emit('status-update', { message: '❌ Video stitching failed!' });
+         io.to(socketId).emit('status-update', { message: '❌ Video stitching failed!' });
       })
       .on('end', async () => {
         console.log(`🚀 Video stitched locally: ${finalOutputPath}`);
-        io.emit('status-update', { message: '☁️ Uploading to cloud...' }); 
+       io.to(socketId).emit('status-update', { message: '☁️ Uploading to cloud...' }); 
 
         try {
           const uploadResult = await cloudinary.uploader.upload(finalOutputPath, {
@@ -728,7 +740,7 @@ const { error: dbError } = await supabase
   }]);
           }
 
-          io.emit('video-done', { 
+         io.to(socketId).emit('video-done', { 
             success: true, 
             message: 'Video complete!', 
             videoUrl: uploadResult.secure_url 
@@ -740,14 +752,14 @@ const { error: dbError } = await supabase
 
         } catch (uploadError) {
           console.error('❌ Cloudinary/DB Error:', uploadError);
-          io.emit('status-update', { message: '❌ Failed to save video to cloud.' });
+         io.to(socketId).emit('status-update', { message: '❌ Failed to save video to cloud.' });
         }
       })
       .save(finalOutputPath);
 
   } catch (error) {
     console.error('❌ Error Pipeline:', error.message);
-    io.emit('status-update', { message: `❌ Error: ${error.message}` });
+  io.to(socketId).emit('status-update', { message: `❌ Error: ${error.message}` });
   }
 }
 
@@ -860,21 +872,30 @@ function runFFmpegRender(input, subtitleFile, output, start, duration, aspectRat
         const relativeSubPath = path.relative(process.cwd(), subtitleFile).replace(/\\/g, '/');
         
         const filters = [];
+        
         if (aspectRatio === '9:16') {
+            // 📱 SHORTS FORMAT (1080x1920)
+            // Crops the center of the video, then scales it to crisp 1080p
             filters.push('crop=ih*(9/16):ih'); 
-            filters.push('scale=720:1280');    
+            filters.push('scale=1080:1920');    
         } else {
-            filters.push('scale=1280:720');    
+            // 💻 YOUTUBE FORMAT (1920x1080)
+            // Scales to 1080p. If it's a weird size, it fits it inside and adds black bars
+            filters.push('scale=1920:1080:force_original_aspect_ratio=decrease');
+            filters.push('pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black');
         }
+        
+        // Add the subtitles on top
         filters.push(`subtitles='${relativeSubPath}'`); 
 
         ffmpeg(input)
             .setStartTime(start)
             .setDuration(duration)
             .videoFilters(filters)
+            // Kept your excellent encoding settings (fast preset, good CRF)
             .outputOptions(['-c:v libx264', '-preset fast', '-crf 22', '-c:a copy'])
             .on('progress', (progress) => {
-                if (progress.percent) io.emit('render-progress', { percent: Math.round(progress.percent) });
+                if (progress.percent) io.to(socketId).emit('render-progress', { percent: Math.round(progress.percent) });
             })
             .on('end', () => resolve())
             .on('error', (err) => reject(err))
