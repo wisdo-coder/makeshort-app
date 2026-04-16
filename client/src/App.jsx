@@ -106,7 +106,11 @@ function App() {
     setStep('processing');
     setStatusMessage('Rendering final video with AI Captions... 🎬');
     try {
-      await axios.post(`${API_URL}/api/render`, { clip: editedClip });
+      // 🟢 FIXED: We are now passing the aspectRatio to the backend!
+      await axios.post(`${API_URL}/api/render`, { 
+        clip: editedClip, 
+        aspectRatio: aspectRatio 
+      });
     } catch (err) {
       console.error(err);
       alert('Failed to start render. Check console.');
@@ -164,13 +168,13 @@ function App() {
                 
                 {/* 🟢 Drop your best generated video here! */}
                 <video 
-                  src="/assets/preview-clip.mp4" 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline
-                  className="w-full h-full object-cover z-10 relative opacity-80"
-                />
+  src="/assets/preview-clip.mp4" // <--- CHANGE THIS LINE
+  autoPlay 
+  loop 
+  muted 
+  playsInline
+  className="w-full h-full object-cover z-10 relative opacity-80"
+/>
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent z-20"></div>
                 <div className="absolute bottom-6 left-0 w-full text-center z-30 px-2">
                     <p className="text-white font-bold text-sm bg-black/60 inline-block px-3 py-1 rounded-lg backdrop-blur-sm">"AITAH for leaving..."</p>
