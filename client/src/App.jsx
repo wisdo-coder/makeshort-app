@@ -228,7 +228,7 @@ function App() {
   <div className="text-sm">
     <h4 className="font-bold text-amber-400 text-base mb-1">Beta Testing Mode</h4>
     <p>
-      We are currently running on testing servers. <strong>Renders might take a few minutes</strong>, so grab a coffee while the AI works! ☕ <br/>
+      We are currently running on testing servers. <strong>Renders might take a few minutes</strong>, so grab a coffee while the AI works! <br/>
       <em>Note: To prevent server timeouts, please keep your input videos <strong>under 10 minutes</strong>.</em>
     </p>
   </div>
