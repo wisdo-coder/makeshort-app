@@ -487,7 +487,7 @@ Format: Layer, Start, End, Style, Text\n`;
     console.log(`🎬 5. Final Video Stitching...`);
    io.to(socketId).emit('status-update', { message: '🎬 Rendering final video...' }); 
 
-    const backgrounds = ['background1.mp4', 'background2.mp4'];
+    const backgrounds = ['background1.mp4'];
     const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
     const backgroundVideoPath = path.join(assetsDir, randomBg);
     
@@ -681,7 +681,7 @@ Format: Layer, Start, End, Style, Text\n`;
     console.log(`🎬 5. Final Video Stitching...`);
    io.to(socketId).emit('status-update', { message: '🎬 Rendering final video...' }); 
 
-    const backgrounds = ['background1.mp4', 'background2.mp4'];
+    const backgrounds = ['background1.mp4'];
     const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
     const backgroundVideoPath = path.join(assetsDir, randomBg);
     
