@@ -73,7 +73,8 @@ function App() {
         await axios.post(`${API_URL}/api/generate-reddit`, {
           redditUrl: redditUrl,
           userId: userId,
-          socketId: currentSocketId // 🟢 Passing the safe socket ID
+          socketId: currentSocketId,
+          aspectRatio: aspectRatio // 🟢 ADD THIS LINE HERE TOO!
         });
 
       // 📝 3. CUSTOM SCRIPT
