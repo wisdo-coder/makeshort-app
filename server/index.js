@@ -377,13 +377,15 @@ if (!transcription || !transcription.text || transcription.text.trim() === "") {
 // ROUTE 5: REDDIT SCRAPER
 // ==========================================
 app.post('/api/generate-reddit', (req, res) => {
-  const { redditUrl, userId, socketId } = req.body; // 🟢 GRAB socketId
+  // 🟢 Extract aspectRatio here
+  const { redditUrl, userId, socketId, aspectRatio } = req.body; 
+  
   if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
 
   res.status(202).json({ message: "Job accepted. Cooking video in background..." });
 
-  // 🟢 PASS socketId
-  processRedditInBackground(redditUrl, userId, socketId).catch(err => console.error("Background Reddit Error:", err));
+  // 🟢 Pass it into the background function
+  processRedditInBackground(redditUrl, userId, socketId, aspectRatio).catch(err => console.error("Background Reddit Error:", err));
 });
 
 // 🟢 ACCEPT socketId
