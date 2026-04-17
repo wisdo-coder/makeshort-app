@@ -80,13 +80,18 @@ function App() {
       } else if (inputType === 'text') { 
         if (!scriptText) return alert("Please enter a script!");
         
+        // 🟢 TRIPWIRE 1: What are we actually sending?
+        console.log("📤 Sending this Aspect Ratio to backend:", aspectRatio);
+
         setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
         
         await axios.post(`${API_URL}/api/generate-text`, {
-          script: scriptText,  // 🟢 THIS WAS THE MISSING LINK
+          script: scriptText, 
           userId: userId,
-          socketId: currentSocketId 
+          socketId: currentSocketId,
+          aspectRatio: aspectRatio 
         });
+      }
 
         // Inside handleGenerate -> text block
 await axios.post(`${API_URL}/api/generate-text`, {
