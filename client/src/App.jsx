@@ -87,6 +87,15 @@ function App() {
           userId: userId,
           socketId: currentSocketId 
         });
+
+        // Inside handleGenerate -> text block
+await axios.post(`${API_URL}/api/generate-text`, {
+  script: scriptText,
+  userId: userId,
+  socketId: currentSocketId,
+  aspectRatio: aspectRatio // 🟢 ADD THIS LINE
+});
+
       }
 
     } catch (error) {
