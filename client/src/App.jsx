@@ -291,10 +291,10 @@ await axios.post(`${API_URL}/api/generate-text`, {
   </button>
   <button 
   disabled 
-  class="bg-gray-400 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
   title="We are upgrading our servers to handle massive video files!"
+  className="flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold bg-gray-800/30 text-gray-500 cursor-not-allowed border border-gray-800/50 flex items-center justify-center gap-2 transition"
 >
-  🔒 Local Video Upload (Pro Feature Coming Soon)
+  🔒 Local Video
 </button>
 </div>
 
