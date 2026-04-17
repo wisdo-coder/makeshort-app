@@ -500,12 +500,15 @@ Format: Layer, Start, End, Style, Text\n`;
     // 🟢 Fix for Linux pathing: FFmpeg requires pure forward slashes
     const escapedAssPath = assPath.replace(/\\/g, '/');
 
-    ffmpeg()
+    const videoFilterString = isWidescreen 
+        ? `scale=1920:1080,subtitles='${escapedAssPath}'`
+        : `crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`;
+
+   ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
-      // 🟢 Wrapped escapedAssPath in single quotes (crucial for Linux)
-      .videoFilters(`crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`) 
-     .outputOptions([
+      .videoFilters(videoFilterString) // 🟢 Use the dynamic string here!
+      .outputOptions([
           '-map 0:v:0',        // 🟢 FORCES the video from Input 0 (background.mp4)
           '-map 1:a:0',        // 🟢 FORCES the audio from Input 1 (AI Voice.mp3)
           '-c:v libx264', 
@@ -577,17 +580,18 @@ const { error: dbError } = await supabase
 // ROUTE 6: TEXT SCRIPT TO VIDEO
 // ==========================================
 app.post('/api/generate-text', (req, res) => {
-  const { script, userId, socketId } = req.body; // 🟢 GRAB socketId
+  // 🟢 Extract aspectRatio here
+  const { script, userId, socketId, aspectRatio } = req.body; 
   if (!script) return res.status(400).json({ error: 'Missing script text' });
 
   res.status(202).json({ message: "Job accepted. Cooking video in background..." });
 
-  // 🟢 PASS socketId
-  processTextInBackground(script, userId, socketId).catch(err => console.error("Background Text Error:", err));
+  // 🟢 Pass it into the function
+  processTextInBackground(script, userId, socketId, aspectRatio).catch(err => console.error("Background Text Error:", err));
 });
 
 // 🟢 ACCEPT socketId
-async function processTextInBackground(script, userId, socketId) {
+async function processTextInBackground(script, userId, socketId, aspectRatio = '9:16') {
   try {
     console.log(`📝 1. Received Custom Script: ${script.substring(0, 30)}...`);
     io.to(socketId).emit('status-update', { message: '📝 Reading your script...' }); // 🟢 WHISPER IT
@@ -820,9 +824,10 @@ ${text}`;
 }
 
 function generateASS(words, clipStart = 0, aspectRatio = '9:16') {
-    const isLandscape = aspectRatio === '16:9';
-    const resX = isLandscape ? 1280 : 720;
-    const resY = isLandscape ? 720 : 1280;
+   const isWidescreen = aspectRatio === '16:9';
+    const resX = isWidescreen ? 1920 : 1080;
+    const resY = isWidescreen ? 1080 : 1920;
+    const marginV = isWidescreen ? 100 : 960; // Moves subtitles to the bottom for YouTube, middle for TikTok
 
     let assContent = `[Script Info]
 ScriptType: v4.00+
@@ -830,11 +835,11 @@ PlayResX: ${resX}
 PlayResY: ${resY}
 
 [V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,80,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,3,5,40,40,640,1
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Alignment, MarginV
+Style: Main,Arial,110,&H0000FFFF,&H00000000,&H00000000,-1,5,${marginV}
 
 [Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
+Format: Layer, Start, End, Style, Text\n`;
 
     const chunkSize = 3; 
     for (let i = 0; i < words.length; i += chunkSize) {
