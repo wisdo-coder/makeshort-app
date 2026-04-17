@@ -91,8 +91,7 @@ function App() {
           socketId: currentSocketId,
           aspectRatio: aspectRatio 
         });
-      }
-
+        
         // Inside handleGenerate -> text block
 await axios.post(`${API_URL}/api/generate-text`, {
   script: scriptText,
