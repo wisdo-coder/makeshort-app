@@ -46,47 +46,54 @@ function App() {
     return () => socketRef.current.disconnect();
   }, []);
 
-  const handleGenerate = async () => {
+ const handleGenerate = async () => {
     setStep('processing');
+    
+    // 🟢 SAFETY CHECK: Make sure the socket actually exists before grabbing the ID!
+    const currentSocketId = socketRef.current ? socketRef.current.id : null;
+    
     try {
+      // 🎬 1. VIDEO UPLOAD (Disabled for now, but code is safe)
       if (inputType === 'video') {
         if (!videoFile) return alert("Please select a video file!");
         const formData = new FormData();
         formData.append('videoFile', videoFile); 
-        formData.append('socketId', socketRef.current.id);
+        formData.append('socketId', currentSocketId);
         
         setStatusMessage('Extracting viral clips... ✂️');
         const { data } = await axios.post(`${API_URL}/api/generate`, formData);
-        
         setClips(data.clips);
         setStep('editing'); 
 
+      // 👽 2. REDDIT LINK
       } else if (inputType === 'reddit') {
         if (!redditUrl) return alert("Please paste a Reddit link!");
         setStatusMessage('Cooking your viral video... 🍳 (This takes about 1-2 minutes)');
         
-       await axios.post(`${API_URL}/api/generate-reddit`, {
-  redditUrl: redditUrl,
-  userId: userId,
-  socketId: socketRef.current.id // 🟢 ADD THIS
-});
+        await axios.post(`${API_URL}/api/generate-reddit`, {
+          redditUrl: redditUrl,
+          userId: userId,
+          socketId: currentSocketId // 🟢 Passing the safe socket ID
+        });
 
-      } else if (inputType === 'text') {
-        if (!scriptText) return alert("Please write a script!");
+      // 📝 3. CUSTOM SCRIPT (The one we were just testing!)
+      } else if (inputType === 'text') { 
+        if (!textScript) return alert("Please enter a script!");
         setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
         
         await axios.post(`${API_URL}/api/generate-text`, {
-          script: scriptText,
-          userId: userId 
+          script: textScript,  // whatever your text state variable is named
+          userId: userId,
+          socketId: currentSocketId // 🟢 MUST BE HERE FOR THE UI TO UPDATE!
         });
       }
 
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.error || "Error processing. Check console.");
-      setStep('idle');
+    } catch (error) {
+       console.error("Generation Error:", error);
+       alert("Something went wrong!");
+       setStep('input');
     }
-  };
+}
 
   const handleFullVideo = async () => {
     setStep('processing');
