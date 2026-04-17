@@ -389,7 +389,8 @@ app.post('/api/generate-reddit', (req, res) => {
 });
 
 // 🟢 ACCEPT socketId
-async function processRedditInBackground(redditUrl, userId, socketId) {
+// ✅ CHANGE IT TO THIS:
+async function processRedditInBackground(redditUrl, userId, socketId, aspectRatio = '9:16') {
   try {
     console.log(`🕵️‍♂️ 1. Scraping Reddit: ${redditUrl}`);
     io.to(socketId).emit('status-update', { message: '🕵️‍♂️ Reading Reddit story...' }); // 🟢 WHISPER IT
