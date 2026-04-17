@@ -499,6 +499,7 @@ Format: Layer, Start, End, Style, Text\n`;
     
     // 🟢 Fix for Linux pathing: FFmpeg requires pure forward slashes
     const escapedAssPath = assPath.replace(/\\/g, '/');
+    const isWidescreen = aspectRatio === '16:9';
 
     const videoFilterString = isWidescreen 
         ? `scale=1920:1080,subtitles='${escapedAssPath}'`
@@ -695,12 +696,18 @@ Format: Layer, Start, End, Style, Text\n`;
     
     // 🟢 Fix for Linux pathing: FFmpeg requires pure forward slashes
     const escapedAssPath = assPath.replace(/\\/g, '/');
+    const isWidescreen = aspectRatio === '16:9';
+    
+    // Check for 16:9 vs 9:16
+    const videoFilterString = isWidescreen 
+        ? `scale=1920:1080,subtitles='${escapedAssPath}'`
+        : `crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`;
 
     ffmpeg()
       .input(backgroundVideoPath)
       .input(audioPath)
       // 🟢 Wrapped escapedAssPath in single quotes (crucial for Linux)
-      .videoFilters(`crop=ih*(9/16):ih,subtitles='${escapedAssPath}'`) 
+      .videoFilters(videoFilterString)
     .outputOptions([
           '-map 0:v:0',        // 🟢 FORCES the video from Input 0 (background.mp4)
           '-map 1:a:0',        // 🟢 FORCES the audio from Input 1 (AI Voice.mp3)
