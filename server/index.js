@@ -580,13 +580,15 @@ const { error: dbError } = await supabase
 // ROUTE 6: TEXT SCRIPT TO VIDEO
 // ==========================================
 app.post('/api/generate-text', (req, res) => {
-  // 🟢 Extract aspectRatio here
   const { script, userId, socketId, aspectRatio } = req.body; 
+  
+  // 🟢 TRIPWIRE 2: What did the backend actually receive?
+  console.log(`📦 Incoming Job - Aspect Ratio received: ${aspectRatio}`); 
+
   if (!script) return res.status(400).json({ error: 'Missing script text' });
 
   res.status(202).json({ message: "Job accepted. Cooking video in background..." });
 
-  // 🟢 Pass it into the function
   processTextInBackground(script, userId, socketId, aspectRatio).catch(err => console.error("Background Text Error:", err));
 });
 
