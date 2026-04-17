@@ -268,11 +268,12 @@ function App() {
     ✍️ Text Script
   </button>
   <button 
-    onClick={() => setInputType('video')}
-    className={`flex-1 py-2 sm:py-3 rounded-lg text-sm font-bold transition ${inputType === 'video' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'}`}
-  >
-    🎬 Video Upload
-  </button>
+  disabled 
+  class="bg-gray-400 text-white font-bold py-2 px-4 rounded opacity-50 cursor-not-allowed flex items-center justify-center gap-2"
+  title="We are upgrading our servers to handle massive video files!"
+>
+  🔒 Local Video Upload (Pro Feature Coming Soon)
+</button>
 </div>
 
 {/* 🟢 DROP IT RIGHT HERE: */}
