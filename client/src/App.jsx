@@ -76,15 +76,16 @@ function App() {
           socketId: currentSocketId // 🟢 Passing the safe socket ID
         });
 
-      // 📝 3. CUSTOM SCRIPT (The one we were just testing!)
+      // 📝 3. CUSTOM SCRIPT
       } else if (inputType === 'text') { 
-        if (!textScript) return alert("Please enter a script!");
+        if (!scriptText) return alert("Please enter a script!");
+        
         setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
         
         await axios.post(`${API_URL}/api/generate-text`, {
-          script: textScript,  // whatever your text state variable is named
+          script: scriptText,  // 🟢 THIS WAS THE MISSING LINK
           userId: userId,
-          socketId: currentSocketId // 🟢 MUST BE HERE FOR THE UI TO UPDATE!
+          socketId: currentSocketId 
         });
       }
 
