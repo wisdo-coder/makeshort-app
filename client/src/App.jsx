@@ -327,7 +327,7 @@ await axios.post(`${API_URL}/api/generate-text`, {
                       rows="4"
                       placeholder="Once upon a time..."
                       value={scriptText}
-                      // onChange={(e) => setScriptText(e.target.value)}
+                      onChange={(e) => setScriptText(e.target.value)}
                       className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 sm:p-4 text-sm sm:text-base text-white focus:outline-none focus:border-blue-500 transition resize-none custom-scrollbar"
                     />
                   </div>
