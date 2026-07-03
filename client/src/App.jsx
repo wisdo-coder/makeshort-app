@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { io } from 'socket.io-client';  
 import axios from 'axios';
 import SubtitleEditor from './components/SubtitleEditor';
 import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import gsap from 'gsap';
-
-const API_URL = 'https://makeshort-backend.onrender.com';
+import { API_URL } from './config';
+import { createSocket } from './socket';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -25,11 +24,7 @@ function App() {
   const { userId } = useAuth();
 
  useEffect(() => {
-    socketRef.current = io(API_URL, {
-        transports: ['websocket', 'polling'],
-        autoConnect: true,
-        reconnectionAttempts: 5 
-    });
+    socketRef.current = createSocket();
     
     socketRef.current.on('connect', () => {
       console.log('✅ Connected to Render WebSocket server! ID:', socketRef.current.id);
@@ -92,14 +87,6 @@ function App() {
           socketId: currentSocketId,
           aspectRatio: aspectRatio 
         });
-        
-        // Inside handleGenerate -> text block
-await axios.post(`${API_URL}/api/generate-text`, {
-  script: scriptText,
-  userId: userId,
-  socketId: currentSocketId,
-  aspectRatio: aspectRatio // 🟢 ADD THIS LINE
-});
 
       }
 

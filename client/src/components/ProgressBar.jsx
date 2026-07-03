@@ -1,18 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
-
-// 🟢 STRICTLY pointing to your live Render backend
-const API_URL = 'https://makeshort-backend.onrender.com';
+import { createSocket } from '../socket';
 
 const ProgressBar = () => {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('Initializing rendering engine...');
 
   useEffect(() => {
-    // 🟢 Connect ONLY when the component actually mounts!
-    const socket = io(API_URL, {
-        transports: ['websocket', 'polling']
-    });
+    const socket = createSocket();
 
     // Listen for progress updates from FFmpeg
     socket.on('render-progress', (data) => {
