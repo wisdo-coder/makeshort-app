@@ -5,7 +5,7 @@ import SubtitleEditor from './components/SubtitleEditor';
 import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import gsap from 'gsap';
 
-const API_URL = 'https://makeshort-backend.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://makeshort-backend.onrender.com';
 
 function App() {
   const [videoFile, setVideoFile] = useState(null);
@@ -31,14 +31,11 @@ function App() {
         reconnectionAttempts: 5 
     });
     
-    socketRef.current.on('connect', () => {
-      console.log('✅ Connected to Render WebSocket server! ID:', socketRef.current.id);
-    });
+    socketRef.current.on('connect', () => {});
     socketRef.current.on('render-progress', (data) => setRenderProgress(data.percent));
     socketRef.current.on('status-update', (data) => setStatusMessage(data.message));
 
     socketRef.current.on('video-done', (data) => {
-      console.log("🎉 Video received via socket!", data);
       setFinalVideoUrl(data.videoUrl || data.url);
       setStep('done');
     });
@@ -49,7 +46,6 @@ function App() {
  const handleGenerate = async () => {
     setStep('processing');
     
-    // 🟢 SAFETY CHECK: Make sure the socket actually exists before grabbing the ID!
     const currentSocketId = socketRef.current ? socketRef.current.id : null;
     
     try {
@@ -81,9 +77,6 @@ function App() {
       } else if (inputType === 'text') { 
         if (!scriptText) return alert("Please enter a script!");
         
-        // 🟢 TRIPWIRE 1: What are we actually sending?
-        console.log("📤 Sending this Aspect Ratio to backend:", aspectRatio);
-
         setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
         
         await axios.post(`${API_URL}/api/generate-text`, {
@@ -92,14 +85,6 @@ function App() {
           socketId: currentSocketId,
           aspectRatio: aspectRatio 
         });
-        
-        // Inside handleGenerate -> text block
-await axios.post(`${API_URL}/api/generate-text`, {
-  script: scriptText,
-  userId: userId,
-  socketId: currentSocketId,
-  aspectRatio: aspectRatio // 🟢 ADD THIS LINE
-});
 
       }
 

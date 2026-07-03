@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
-// 🟢 STRICTLY pointing to your live Render backend
-const API_URL = 'https://makeshort-backend.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://makeshort-backend.onrender.com';
 
 const ProgressBar = () => {
   const [progress, setProgress] = useState(0);
