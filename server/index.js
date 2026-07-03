@@ -13,6 +13,7 @@ const createVideoRoutes = require('./routes/video');
 const createRedditRoutes = require('./routes/reddit');
 const createTextRoutes = require('./routes/text');
 const createConfigRoutes = require('./routes/config');
+const createStripeRoutes = require('./routes/stripe');
 
 // --- Directory setup ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -69,6 +70,7 @@ app.use('/api', createVideoRoutes(routeContext));
 app.use('/api', createRedditRoutes(routeContext));
 app.use('/api', createTextRoutes(routeContext));
 app.use('/api', createConfigRoutes(routeContext));
+app.use('/api/stripe', createStripeRoutes());
 
 // --- Error handler (must be last) ---
 app.use(errorHandler);
