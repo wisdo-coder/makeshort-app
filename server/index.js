@@ -16,16 +16,11 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-console.log("TESTING API KEYS:");
-console.log("Groq Key Found:", !!process.env.GROQ_API_KEY);
-console.log("Gemini Key Found:", !!process.env.GEMINI_API_KEY);
-console.log("ElevenLabs Key Found:", !!process.env.ELEVENLABS_API_KEY);
-
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { exec } = require('child_process');
+// child_process used via execFile in runCommand helper
 const Groq = require('groq-sdk');
 const { GoogleGenAI } = require('@google/genai');
 const multer = require('multer'); 
@@ -45,17 +40,31 @@ if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir);
 
 // --- Configure Multer to save uploaded files directly to 'uploads' ---
+const ALLOWED_VIDEO_MIMES = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, uploadsDir); 
     },
     filename: function (req, file, cb) {
         const videoId = Date.now();
-        const ext = path.extname(file.originalname) || '.mp4';
-        cb(null, `${videoId}${ext}`);
+        const ext = path.extname(file.originalname).toLowerCase();
+        const safeExt = ['.mp4', '.mov', '.avi', '.webm'].includes(ext) ? ext : '.mp4';
+        cb(null, `${videoId}${safeExt}`);
     }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: MAX_FILE_SIZE },
+    fileFilter: (req, file, cb) => {
+        if (ALLOWED_VIDEO_MIMES.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only video files (mp4, mov, avi, webm) are allowed.'));
+        }
+    }
+});
 
 // Helper to force ANY weird AI time format into pure seconds
 function parseAITime(timeVal) {
@@ -76,12 +85,16 @@ function parseAITime(timeVal) {
 
 const app = express();
 const server = http.createServer(app);
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['https://makeshort.vercel.app', 'http://localhost:5173'];
+
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
+  cors: { origin: ALLOWED_ORIGINS, methods: ["GET", "POST"] }
 });
 
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+app.use(cors({ origin: ALLOWED_ORIGINS }));
+app.use(express.json({ limit: '1mb' }));
 
 app.use('/output', express.static(outputDir));
 app.use('/temp', express.static(path.join(__dirname, 'temp')));
@@ -282,8 +295,15 @@ async function processRenderInBackground(clip, aspectRatio, socketId) {
 // ROUTE 3: 1-CLICK DOWNLOAD
 // ==========================================
 app.get('/api/download/:filename', (req, res) => {
-    const filename = req.params.filename;
-    const filePath = path.join(outputDir, filename); 
+    const filename = path.basename(req.params.filename);
+    if (filename !== req.params.filename || filename.includes('..')) {
+        return res.status(400).send("Invalid filename");
+    }
+    const filePath = path.join(outputDir, filename);
+    const resolvedPath = path.resolve(filePath);
+    if (!resolvedPath.startsWith(path.resolve(outputDir))) {
+        return res.status(403).send("Access denied");
+    }
     res.download(filePath, `MakeShort-${filename}`, (err) => {
         if (err) res.status(404).send("File not found");
     });
@@ -381,6 +401,15 @@ app.post('/api/generate-reddit', (req, res) => {
   const { redditUrl, userId, socketId, aspectRatio } = req.body; 
   
   if (!redditUrl) return res.status(400).json({ error: 'Missing Reddit URL' });
+
+  try {
+    const parsedUrl = new URL(redditUrl);
+    if (!['www.reddit.com', 'reddit.com', 'old.reddit.com'].includes(parsedUrl.hostname)) {
+      return res.status(400).json({ error: 'URL must be a reddit.com link' });
+    }
+  } catch {
+    return res.status(400).json({ error: 'Invalid URL format' });
+  }
 
   res.status(202).json({ message: "Job accepted. Cooking video in background..." });
 
@@ -576,7 +605,7 @@ const { error: dbError } = await supabase
 
   } catch (error) {
     console.error('❌ Error Pipeline:', error.message);
-   io.to(socketId).emit('status-update', { message: `❌ Error: ${error.message}` });
+   io.to(socketId).emit('status-update', { message: '❌ An error occurred during processing.' });
   }
 }
 
@@ -775,16 +804,20 @@ const { error: dbError } = await supabase
 
   } catch (error) {
     console.error('❌ Error Pipeline:', error.message);
-  io.to(socketId).emit('status-update', { message: `❌ Error: ${error.message}` });
+  io.to(socketId).emit('status-update', { message: '❌ An error occurred during processing.' });
   }
 }
 
 // ==========================================
 // HELPER FUNCTIONS
 // ==========================================
+const { execFile } = require('child_process');
+
 function runCommand(cmd) {
+    const args = cmd.split(/\s+/);
+    const binary = args.shift();
     return new Promise((resolve, reject) => {
-        exec(cmd, (error, stdout, stderr) => {
+        execFile(binary, args, (error, stdout, stderr) => {
             if (error) reject(error);
             else resolve(stdout);
         });
