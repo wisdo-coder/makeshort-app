@@ -32,13 +32,27 @@ function App() {
     });
     
     socketRef.current.on('connect', () => {
-      console.log('✅ Connected to Render WebSocket server! ID:', socketRef.current.id);
+      console.log('Connected to WebSocket server! ID:', socketRef.current.id);
+    });
+    socketRef.current.on('connect_error', (err) => {
+      console.error('WebSocket connection error:', err.message);
+      setStatusMessage(`Connection error: ${err.message}. Retrying...`);
+    });
+    socketRef.current.on('disconnect', (reason) => {
+      console.warn('WebSocket disconnected:', reason);
+      if (reason === 'io server disconnect' || reason === 'transport close') {
+        setStatusMessage('Lost connection to server. Attempting to reconnect...');
+      }
+    });
+    socketRef.current.on('reconnect_failed', () => {
+      setStatusMessage('Unable to reconnect to server. Please refresh the page.');
+      setStep('idle');
     });
     socketRef.current.on('render-progress', (data) => setRenderProgress(data.percent));
     socketRef.current.on('status-update', (data) => setStatusMessage(data.message));
 
     socketRef.current.on('video-done', (data) => {
-      console.log("🎉 Video received via socket!", data);
+      console.log("Video received via socket!", data);
       setFinalVideoUrl(data.videoUrl || data.url);
       setStep('done');
     });
@@ -77,14 +91,11 @@ function App() {
           aspectRatio: aspectRatio // 🟢 ADD THIS LINE HERE TOO!
         });
 
-      // 📝 3. CUSTOM SCRIPT
+      // 3. CUSTOM SCRIPT
       } else if (inputType === 'text') { 
         if (!scriptText) return alert("Please enter a script!");
-        
-        // 🟢 TRIPWIRE 1: What are we actually sending?
-        console.log("📤 Sending this Aspect Ratio to backend:", aspectRatio);
 
-        setStatusMessage('Cooking your custom script... 🍳 (This takes about 1-2 minutes)');
+        setStatusMessage('Cooking your custom script... (This takes about 1-2 minutes)');
         
         await axios.post(`${API_URL}/api/generate-text`, {
           script: scriptText, 
@@ -92,37 +103,37 @@ function App() {
           socketId: currentSocketId,
           aspectRatio: aspectRatio 
         });
-        
-        // Inside handleGenerate -> text block
-await axios.post(`${API_URL}/api/generate-text`, {
-  script: scriptText,
-  userId: userId,
-  socketId: currentSocketId,
-  aspectRatio: aspectRatio // 🟢 ADD THIS LINE
-});
 
       }
 
     } catch (error) {
        console.error("Generation Error:", error);
-       alert("Something went wrong!");
-       setStep('input');
+       const serverMsg = error.response?.data?.error || error.message || "Something went wrong!";
+       alert(`Generation failed: ${serverMsg}`);
+       setStep('idle');
     }
 }
 
   const handleFullVideo = async () => {
     setStep('processing');
     try {
-      if (!videoFile) return alert("Please select a video file!");
+      if (!videoFile) { setStep('idle'); return alert("Please select a video file!"); }
       const formData = new FormData();
       formData.append('videoFile', videoFile);
-      setStatusMessage('Transcribing full video... 🗣️');
+      const currentSocketId = socketRef.current ? socketRef.current.id : null;
+      formData.append('socketId', currentSocketId);
+      setStatusMessage('Transcribing full video...');
       const { data } = await axios.post(`${API_URL}/api/transcribe-only`, formData);
+      if (!data.clips || data.clips.length === 0) {
+        alert("Transcription returned no clips. The video may not have usable audio.");
+        setStep('idle');
+        return;
+      }
       setClips(data.clips);
       setStep('editing');
     } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.error || "Error processing full video.");
+      console.error("Full video error:", err);
+      alert(err.response?.data?.error || `Error processing full video: ${err.message}`);
       setStep('idle');
     }
   };
