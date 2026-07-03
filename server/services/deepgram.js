@@ -3,10 +3,10 @@ const path = require('path');
 const axios = require('axios');
 const { formatAssTime } = require('../utils');
 
-async function generateVoice(text) {
+async function generateVoice(text, voiceId = 'aura-orion-en') {
   const response = await axios({
     method: 'post',
-    url: 'https://api.deepgram.com/v1/speak?model=aura-orion-en',
+    url: `https://api.deepgram.com/v1/speak?model=${voiceId}`,
     headers: {
       'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
       'Content-Type': 'application/json',
@@ -44,8 +44,16 @@ function buildSubtitleChunks(wordsArray) {
   return chunks;
 }
 
-function buildSimpleASS(chunks, aspectRatio = '9:16') {
+function buildSimpleASS(chunks, aspectRatio = '9:16', captionStyle = null) {
   const isWidescreen = aspectRatio === '16:9';
+  const style = captionStyle || {
+    fontName: 'Arial',
+    fontSize: 110,
+    primaryColour: '&H0000FFFF',
+    outlineColour: '&H00000000',
+    backColour: '&H00000000',
+    bold: -1,
+  };
 
   let assContent = `[Script Info]
 ScriptType: v4.00+
@@ -54,7 +62,7 @@ PlayResY: ${isWidescreen ? 1080 : 1920}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Alignment, MarginV
-Style: Main,Arial,110,&H0000FFFF,&H00000000,&H00000000,-1,5,${isWidescreen ? 100 : 960}
+Style: Main,${style.fontName},${style.fontSize},${style.primaryColour},${style.outlineColour},${style.backColour},${style.bold},5,${isWidescreen ? 100 : 960}
 
 [Events]
 Format: Layer, Start, End, Style, Text\n`;
@@ -65,14 +73,15 @@ Format: Layer, Start, End, Style, Text\n`;
   return assContent;
 }
 
-async function generateVoiceAndSubtitles(script, tempDir, timestamp, aspectRatio) {
-  const audioBuffer = await generateVoice(script);
+async function generateVoiceAndSubtitles(script, tempDir, timestamp, aspectRatio, options = {}) {
+  const { voiceId, captionStyle } = options;
+  const audioBuffer = await generateVoice(script, voiceId);
   const audioPath = path.join(tempDir, `voice_${timestamp}.mp3`);
   fs.writeFileSync(audioPath, audioBuffer);
 
   const wordsArray = await transcribeAudio(fs.readFileSync(audioPath));
   const chunks = buildSubtitleChunks(wordsArray);
-  const assContent = buildSimpleASS(chunks, aspectRatio);
+  const assContent = buildSimpleASS(chunks, aspectRatio, captionStyle);
   const assPath = path.join(tempDir, `subs_${timestamp}.ass`);
   fs.writeFileSync(assPath, assContent);
 

@@ -8,6 +8,8 @@ const { renderVideo } = require('../services/ffmpeg');
 const { uploadVideo } = require('../services/cloudinary');
 const { requireBody } = require('../middleware/validate');
 const { generateLimiter } = require('../middleware/rateLimiter');
+const BACKGROUNDS = require('../config/backgrounds');
+const CAPTION_STYLES = require('../config/captionStyles');
 
 const router = express.Router();
 
@@ -15,12 +17,12 @@ module.exports = function createRedditRoutes({ assetsDir, outputDir, io }) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
   router.post('/generate-reddit', generateLimiter, requireBody('redditUrl'), async (req, res) => {
-    const { redditUrl, userId, socketId, aspectRatio } = req.body;
+    const { redditUrl, userId, socketId, aspectRatio, voiceId, backgroundId, captionStyleId } = req.body;
     res.status(202).json({ message: 'Job accepted. Cooking video in background...' });
-    processRedditInBackground(redditUrl, userId, socketId, aspectRatio).catch(err => console.error('Background Reddit Error:', err));
+    processRedditInBackground(redditUrl, userId, socketId, aspectRatio, { voiceId, backgroundId, captionStyleId }).catch(err => console.error('Background Reddit Error:', err));
   });
 
-  async function processRedditInBackground(redditUrl, userId, socketId, aspectRatio = '9:16') {
+  async function processRedditInBackground(redditUrl, userId, socketId, aspectRatio = '9:16', options = {}) {
     try {
       io.to(socketId).emit('status-update', { message: 'Reading Reddit story...' });
 
@@ -43,13 +45,22 @@ module.exports = function createRedditRoutes({ assetsDir, outputDir, io }) {
       if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
       const timestamp = Date.now();
 
-      const { audioPath, assPath } = await generateVoiceAndSubtitles(fullScript, tempDir, timestamp, aspectRatio);
+      const captionStyle = options.captionStyleId
+        ? CAPTION_STYLES.find(s => s.id === options.captionStyleId)
+        : null;
+
+      const { audioPath, assPath } = await generateVoiceAndSubtitles(
+        fullScript, tempDir, timestamp, aspectRatio,
+        { voiceId: options.voiceId, captionStyle }
+      );
 
       io.to(socketId).emit('status-update', { message: 'Rendering final video...' });
 
-      const backgrounds = ['background1.mp4'];
-      const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
-      const backgroundVideoPath = path.join(assetsDir, randomBg);
+      const bgConfig = options.backgroundId
+        ? BACKGROUNDS.find(b => b.id === options.backgroundId)
+        : null;
+      const bgFilename = bgConfig ? bgConfig.filename : 'background1.mp4';
+      const backgroundVideoPath = path.join(assetsDir, bgFilename);
 
       if (!fs.existsSync(backgroundVideoPath)) {
         throw new Error(`Background video missing at ${backgroundVideoPath}. Please add videos to the 'assets' folder.`);

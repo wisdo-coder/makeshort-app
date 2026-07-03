@@ -12,6 +12,7 @@ const { apiLimiter } = require('./middleware/rateLimiter');
 const createVideoRoutes = require('./routes/video');
 const createRedditRoutes = require('./routes/reddit');
 const createTextRoutes = require('./routes/text');
+const createConfigRoutes = require('./routes/config');
 
 // --- Directory setup ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -67,6 +68,7 @@ const routeContext = { upload, uploadsDir, outputDir, assetsDir, io };
 app.use('/api', createVideoRoutes(routeContext));
 app.use('/api', createRedditRoutes(routeContext));
 app.use('/api', createTextRoutes(routeContext));
+app.use('/api', createConfigRoutes(routeContext));
 
 // --- Error handler (must be last) ---
 app.use(errorHandler);

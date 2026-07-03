@@ -1,0 +1,68 @@
+const VOICES = [
+  {
+    id: 'aura-orion-en',
+    name: 'Orion',
+    gender: 'Male',
+    age: 'Young',
+    accent: 'American',
+    style: 'Clear & Confident',
+  },
+  {
+    id: 'aura-luna-en',
+    name: 'Luna',
+    gender: 'Female',
+    age: 'Young',
+    accent: 'American',
+    style: 'Warm & Friendly',
+  },
+  {
+    id: 'aura-stella-en',
+    name: 'Stella',
+    gender: 'Female',
+    age: 'Middle-aged',
+    accent: 'American',
+    style: 'Calm & Professional',
+  },
+  {
+    id: 'aura-arcas-en',
+    name: 'Arcas',
+    gender: 'Male',
+    age: 'Middle-aged',
+    accent: 'American',
+    style: 'Deep & Authoritative',
+  },
+  {
+    id: 'aura-perseus-en',
+    name: 'Perseus',
+    gender: 'Male',
+    age: 'Young',
+    accent: 'American',
+    style: 'Energetic & Engaging',
+  },
+  {
+    id: 'aura-angus-en',
+    name: 'Angus',
+    gender: 'Male',
+    age: 'Middle-aged',
+    accent: 'Irish',
+    style: 'Storytelling & Dramatic',
+  },
+  {
+    id: 'aura-athena-en',
+    name: 'Athena',
+    gender: 'Female',
+    age: 'Young',
+    accent: 'British',
+    style: 'Crisp & Articulate',
+  },
+  {
+    id: 'aura-helios-en',
+    name: 'Helios',
+    gender: 'Male',
+    age: 'Young',
+    accent: 'British',
+    style: 'Smooth & Narrative',
+  },
+];
+
+module.exports = VOICES;

@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';  
 import axios from 'axios';
 import SubtitleEditor from './components/SubtitleEditor';
+import VoicePicker from './components/VoicePicker';
+import BackgroundPicker from './components/BackgroundPicker';
+import CaptionStylePicker from './components/CaptionStylePicker';
+import VideoHistory from './components/VideoHistory';
 import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import gsap from 'gsap';
 
@@ -22,6 +26,10 @@ function App() {
   const [processingMode, setProcessingMode] = useState('shorts'); 
   const [renderProgress, setRenderProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Starting engine...');
+  const [voiceId, setVoiceId] = useState('aura-orion-en');
+  const [backgroundId, setBackgroundId] = useState('minecraft-parkour');
+  const [captionStyleId, setCaptionStyleId] = useState('classic-yellow');
+  const [showHistory, setShowHistory] = useState(false);
   const { userId } = useAuth();
 
  useEffect(() => {
@@ -70,7 +78,10 @@ function App() {
           redditUrl: redditUrl,
           userId: userId,
           socketId: currentSocketId,
-          aspectRatio: aspectRatio // 🟢 ADD THIS LINE HERE TOO!
+          aspectRatio: aspectRatio,
+          voiceId: voiceId,
+          backgroundId: backgroundId,
+          captionStyleId: captionStyleId,
         });
 
       // 📝 3. CUSTOM SCRIPT
@@ -83,7 +94,10 @@ function App() {
           script: scriptText, 
           userId: userId,
           socketId: currentSocketId,
-          aspectRatio: aspectRatio 
+          aspectRatio: aspectRatio,
+          voiceId: voiceId,
+          backgroundId: backgroundId,
+          captionStyleId: captionStyleId,
         });
 
       }
@@ -251,13 +265,29 @@ function App() {
         {/* Adjusted padding for mobile (px-4 py-8) */}
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12 mt-12 sm:mt-0">
           
-          <header className="text-center mb-8 sm:mb-12">
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-white">Dashboard</h1>
-            <p className="text-sm sm:text-base text-gray-400 mt-2">What are we turning viral today?</p>
+          <header className="flex flex-col sm:flex-row justify-between items-center mb-8 sm:mb-12 gap-4">
+            <div className="text-center sm:text-left">
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-white">Dashboard</h1>
+              <p className="text-sm sm:text-base text-gray-400 mt-1">What are we turning viral today?</p>
+            </div>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all border ${
+                showHistory
+                  ? 'bg-blue-600 border-blue-500 text-white'
+                  : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+              }`}
+            >
+              My Creations
+            </button>
           </header>
 
+          {showHistory && (
+            <VideoHistory userId={userId} onClose={() => setShowHistory(false)} />
+          )}
+
           {/* State 1: Idle Input */}
-          {step === 'idle' && (
+          {step === 'idle' && !showHistory && (
             <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-5 sm:p-8 rounded-2xl border border-gray-800 shadow-xl">
               
               {/* Input Type Tabs - Now wrap nicely on mobile */}
@@ -387,13 +417,28 @@ function App() {
                 </div>
               )}
 
+              {/* Voice Selection */}
+              {inputType !== 'video' && (
+                <VoicePicker selectedVoice={voiceId} onSelect={setVoiceId} />
+              )}
+
+              {/* Background Video */}
+              {inputType !== 'video' && (
+                <BackgroundPicker selectedBackground={backgroundId} onSelect={setBackgroundId} />
+              )}
+
+              {/* Caption Style */}
+              {inputType !== 'video' && (
+                <CaptionStylePicker selectedStyle={captionStyleId} onSelect={setCaptionStyleId} />
+              )}
+
               {/* Master Action Button */}
               <div className="pt-4 border-t border-gray-800 mt-6">
                 <button 
                   onClick={inputType === 'video' && processingMode === 'full' ? handleFullVideo : handleGenerate}
                   className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-base sm:text-lg transition-all transform hover:scale-[1.02] active:scale-95 shadow-lg shadow-emerald-600/20"
                 >
-                  Generate Viral Video 🚀
+                  Generate Viral Video
                 </button>
               </div>
               
