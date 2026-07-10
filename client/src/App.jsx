@@ -6,6 +6,9 @@ import VoicePicker from './components/VoicePicker';
 import BackgroundPicker from './components/BackgroundPicker';
 import CaptionStylePicker from './components/CaptionStylePicker';
 import VideoHistory from './components/VideoHistory';
+import PricingPage from './components/PricingPage';
+import UsageBar from './components/UsageBar';
+import LandingPage from './components/LandingPage';
 import { SignedIn, SignedOut, SignIn, UserButton, useAuth } from "@clerk/clerk-react";
 import gsap from 'gsap';
 
@@ -30,6 +33,9 @@ function App() {
   const [backgroundId, setBackgroundId] = useState('minecraft-parkour');
   const [captionStyleId, setCaptionStyleId] = useState('classic-yellow');
   const [showHistory, setShowHistory] = useState(false);
+  const [showPricing, setShowPricing] = useState(false);
+  const [currentPlan, setCurrentPlan] = useState('free');
+  const [showLanding, setShowLanding] = useState(true);
   const { userId } = useAuth();
 
  useEffect(() => {
@@ -184,64 +190,75 @@ function App() {
       
       {/* 🔒 LOGGED OUT STATE: The New Split-Screen Mobile-Optimized Login */}
       <SignedOut>
-        <div className="flex min-h-screen w-full">
-          {/* 🌟 LEFT SIDE: App Preview (Hidden on Mobile) */}
-          <div className="hidden lg:flex lg:w-1/2 bg-gray-900 relative items-center justify-center border-r border-gray-800 p-8 flex-col overflow-hidden">
-            {/* Background Glows */}
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
-
-            <div className="relative z-20 text-center max-w-lg">
-              <div className="inline-block px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-sm mb-6">
-                🚀 MakeShort v2.0 is Live
-              </div>
-              <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-emerald-400 to-cyan-400 leading-tight">
-                Turn long videos into viral Shorts in 1-Click.
-              </h2>
-              <p className="text-gray-400 mb-10 text-lg">
-                The AI-powered engine for Faceless Channels. Join thousands of creators automating their content.
-              </p>
-              
-              {/* Phone Mockup for Video Preview */}
-              <div className="w-[260px] h-[520px] bg-black rounded-[2.5rem] border-[8px] border-gray-800 shadow-2xl overflow-hidden mx-auto relative shadow-emerald-500/20">
-                {/* Notch */}
-                <div className="absolute top-0 inset-x-0 h-6 bg-gray-800 rounded-b-3xl w-1/2 mx-auto z-30"></div>
-                
-                {/* 🟢 Drop your best generated video here! */}
-                <video 
-  ref={videoRef}
-  src="/assets/preview-clip.mp4" 
-  autoPlay 
-  loop 
-  muted 
-  defaultMuted 
-  playsInline
-  className="w-full h-full object-cover z-10 relative opacity-80"
-/>
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent z-20"></div>
-                <div className="absolute bottom-6 left-0 w-full text-center z-30 px-2">
-                    <p className="text-white font-bold text-sm bg-black/60 inline-block px-3 py-1 rounded-lg backdrop-blur-sm">"AITAH for leaving..."</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 🔐 RIGHT SIDE: Clerk Login Form */}
-          <div className="flex w-full lg:w-1/2 flex-col justify-center items-center p-4 sm:p-12 relative z-10">
-            {/* Show simple header on mobile only, since left side is hidden */}
-            <div className="lg:hidden text-center mb-8">
-              <div className="inline-block px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-xs mb-4">
-                🚀 MakeShort v2.0
-              </div>
-              <h1 className="text-3xl font-black text-white mb-2">Welcome Back</h1>
-              <p className="text-gray-400 text-sm">Sign in to start creating viral content.</p>
-            </div>
-
-            <div className="w-full max-w-md flex justify-center transform transition duration-300 hover:scale-[1.01]">
+        {showLanding ? (
+          <LandingPage onGetStarted={(action) => {
+            if (action === 'pricing') {
+              setShowLanding(false);
+              setShowPricing(true);
+            } else {
+              setShowLanding(false);
+            }
+          }} />
+        ) : showPricing ? (
+          <div className="min-h-screen bg-gray-950 text-white p-6 sm:p-12">
+            <button
+              onClick={() => { setShowPricing(false); setShowLanding(true); }}
+              className="text-gray-400 hover:text-white mb-6 flex items-center gap-2 font-bold text-sm"
+            >
+              &larr; Back to Home
+            </button>
+            <PricingPage onClose={() => { setShowPricing(false); setShowLanding(true); }} currentPlan="free" />
+            <div className="max-w-md mx-auto mt-12 text-center">
+              <p className="text-gray-400 text-sm mb-4">Sign in to start your plan</p>
               <SignIn routing="hash" />
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex min-h-screen w-full">
+            {/* LEFT SIDE: App Preview (Hidden on Mobile) */}
+            <div className="hidden lg:flex lg:w-1/2 bg-gray-900 relative items-center justify-center border-r border-gray-800 p-8 flex-col overflow-hidden">
+              <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
+              <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
+              <div className="relative z-20 text-center max-w-lg">
+                <div className="inline-block px-4 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-sm mb-6">
+                  AI-Powered Video Engine
+                </div>
+                <h2 className="text-4xl lg:text-5xl font-extrabold mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-emerald-400 to-cyan-400 leading-tight">
+                  Turn any story into a viral short.
+                </h2>
+                <p className="text-gray-400 mb-10 text-lg">
+                  The AI-powered engine for Faceless Channels. Join thousands of creators automating their content.
+                </p>
+                <div className="w-[260px] h-[520px] bg-black rounded-[2.5rem] border-[8px] border-gray-800 shadow-2xl overflow-hidden mx-auto relative shadow-emerald-500/20">
+                  <div className="absolute top-0 inset-x-0 h-6 bg-gray-800 rounded-b-3xl w-1/2 mx-auto z-30"></div>
+                  <video 
+                    ref={videoRef}
+                    src="/assets/preview-clip.mp4" 
+                    autoPlay loop muted defaultMuted playsInline
+                    className="w-full h-full object-cover z-10 relative opacity-80"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-transparent to-transparent z-20"></div>
+                  <div className="absolute bottom-6 left-0 w-full text-center z-30 px-2">
+                    <p className="text-white font-bold text-sm bg-black/60 inline-block px-3 py-1 rounded-lg backdrop-blur-sm">"AITAH for leaving..."</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* RIGHT SIDE: Clerk Login Form */}
+            <div className="flex w-full lg:w-1/2 flex-col justify-center items-center p-4 sm:p-12 relative z-10">
+              <div className="lg:hidden text-center mb-8">
+                <div className="inline-block px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 font-semibold text-xs mb-4">
+                  MakeShort
+                </div>
+                <h1 className="text-3xl font-black text-white mb-2">Welcome Back</h1>
+                <p className="text-gray-400 text-sm">Sign in to start creating viral content.</p>
+              </div>
+              <div className="w-full max-w-md flex justify-center transform transition duration-300 hover:scale-[1.01]">
+                <SignIn routing="hash" />
+              </div>
+            </div>
+          </div>
+        )}
       </SignedOut>
 
       {/* 🔓 LOGGED IN STATE: The Mobile-Optimized Dashboard */}
@@ -270,24 +287,44 @@ function App() {
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white">Dashboard</h1>
               <p className="text-sm sm:text-base text-gray-400 mt-1">What are we turning viral today?</p>
             </div>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all border ${
-                showHistory
-                  ? 'bg-blue-600 border-blue-500 text-white'
-                  : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
-              }`}
-            >
-              My Creations
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowPricing(!showPricing); setShowHistory(false); }}
+                className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${
+                  showPricing
+                    ? 'bg-emerald-600 border-emerald-500 text-white'
+                    : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                }`}
+              >
+                Pricing
+              </button>
+              <button
+                onClick={() => { setShowHistory(!showHistory); setShowPricing(false); }}
+                className={`px-4 py-2.5 rounded-xl font-bold text-sm transition-all border ${
+                  showHistory
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                }`}
+              >
+                My Creations
+              </button>
+            </div>
           </header>
 
-          {showHistory && (
+          <UsageBar userId={userId} onUpgrade={() => { setShowPricing(true); setShowHistory(false); }} />
+
+          {showPricing && (
+            <div className="mt-6">
+              <PricingPage onClose={() => setShowPricing(false)} currentPlan={currentPlan} />
+            </div>
+          )}
+
+          {showHistory && !showPricing && (
             <VideoHistory userId={userId} onClose={() => setShowHistory(false)} />
           )}
 
           {/* State 1: Idle Input */}
-          {step === 'idle' && !showHistory && (
+          {step === 'idle' && !showHistory && !showPricing && (
             <div className="max-w-2xl mx-auto space-y-6 bg-gray-900 p-5 sm:p-8 rounded-2xl border border-gray-800 shadow-xl">
               
               {/* Input Type Tabs - Now wrap nicely on mobile */}

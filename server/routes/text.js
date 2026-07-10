@@ -7,6 +7,7 @@ const { renderVideo } = require('../services/ffmpeg');
 const { uploadVideo } = require('../services/cloudinary');
 const { requireBody } = require('../middleware/validate');
 const { generateLimiter } = require('../middleware/rateLimiter');
+const createUsageTracker = require('../middleware/usageTracker');
 const BACKGROUNDS = require('../config/backgrounds');
 const CAPTION_STYLES = require('../config/captionStyles');
 
@@ -15,7 +16,9 @@ const router = express.Router();
 module.exports = function createTextRoutes({ assetsDir, outputDir, io }) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-  router.post('/generate-text', generateLimiter, requireBody('script'), async (req, res) => {
+  const { checkUsageLimit } = createUsageTracker();
+
+  router.post('/generate-text', generateLimiter, requireBody('script'), checkUsageLimit, async (req, res) => {
     const { script, userId, socketId, aspectRatio, voiceId, backgroundId, captionStyleId } = req.body;
     res.status(202).json({ message: 'Job accepted. Cooking video in background...' });
     processTextInBackground(script, userId, socketId, aspectRatio, { voiceId, backgroundId, captionStyleId }).catch(err => console.error('Background Text Error:', err));
